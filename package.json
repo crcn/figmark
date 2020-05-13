@@ -1,0 +1,24 @@
+{
+  "name": "figmark",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "test": "",
+    "build": "lerna run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/crcn/figmark.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/crcn/figmark/issues"
+  },
+  "homepage": "https://github.com/crcn/figmark#readme",
+  "dependencies": {
+    "lerna": "^3.21.0"
+  }
+}
