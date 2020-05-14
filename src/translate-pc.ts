@@ -1,5 +1,5 @@
 import { createTranslateContext, TranslateContext, addBuffer, startBlock, endBlock } from "./translate-utils";
-import {Node, NodeType, VectorNodeProps, hasVectorProps, flattenNodes, getUniqueNodeName, hasChildren} from "./state";
+import {Node, NodeType, VectorNodeProps, hasVectorProps, flattenNodes, getUniqueNodeName, hasChildren, Document, cleanupNodeId, getNodeById, getAllTextNodes} from "./state";
 import { pascalCase } from "./utils";
 
 
@@ -7,13 +7,13 @@ export const translateFigmaProjectToPaperclip = (file) => {
   let context = createTranslateContext();
 
   context = addBuffer(`\n\n<!-- STYLES -->\n\n`, context);
-  context = translateStyles(file, context);
+  context = translateStyles(file.document, context);
 
   context = addBuffer(`\n<!-- COMPONENTS -->\n\n`, context);
   context = translateComponents(file.document, context);
 
   context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
-  context = translatePreview(file.document, context);
+  context = translatePreviews(file.document, context);
   // console.log(JSON.stringify(file, null, 2));
   console.log(context.buffer);
   // console.log(JSON.stringify(file, null, 2));
@@ -56,43 +56,90 @@ const translateComponent = (node: Node, context: TranslateContext) => {
   }
   return context;
 }
+const translatePreviews = (document: Document, context: TranslateContext) => {
+  const canvas = document.children[0];
 
-const translatePreview = (node: Node, context: TranslateContext, extraLineBreak: boolean = false) => {
-
-  const shouldIncludeTag = node.type !== NodeType.Document && node.type !== NodeType.Canvas;
-
-  if (shouldIncludeTag) {
-    context = addBuffer(`<${getNodeComponentName(node)}>\n`, context);
-    context = startBlock(context);
+  if (!hasChildren(canvas)) {
+    return;
   }
-  if (hasChildren(node)) {
-    for (const child of node.children) {
-      context = translatePreview(child, context, !shouldIncludeTag);
+
+  for (const child of canvas.children) {
+    context = translatePreview(child, document, context);
+
+    // some space between previews
+    context = addBuffer(`\n`, context);
+  }
+
+  return context;
+}
+
+const getPreviewComponentName = (nodeId: string, document: Document) => "_" + pascalCase(getNodeById(nodeId, document).name + "_" + cleanupNodeId(nodeId));
+
+const translatePreview = (node: Node, document: Document, context: TranslateContext, inComponent?: boolean) => {
+
+
+
+
+  if (node.type === NodeType.Instance) {
+    context = translateInstancePreview(node, document, node.componentId, context);
+  } else {
+
+
+    context = addBuffer(`<${getNodeComponentName(node)}`, context);
+    const isComponent = node.type === NodeType.Component;
+
+    if (isComponent) {
+      context = addBuffer(` component as="${getPreviewComponentName(node.id, document)}"`, context);
+      inComponent = true;
     }
-  }
-  if (node.type === NodeType.Text) {
-    context = addBuffer(`${node.characters}\n`, context);
-  }
-  if (shouldIncludeTag) {
+
+    context = addBuffer(`>\n`, context);
+    context = startBlock(context);
+    if (node.type === NodeType.Text) {
+      if (inComponent) {
+        context = addBuffer(`{_${getUniqueNodeName(node)}_text}\n`, context);
+      } else {
+        context = addBuffer(`${node.characters}\n`, context);
+      }
+
+    } else if (hasChildren(node)) {
+      for (const child of node.children) {
+        context = translatePreview(child, document, context, inComponent);
+      }
+    }
     context = endBlock(context);
     context = addBuffer(`</${getNodeComponentName(node)}>\n`, context);
-    if (extraLineBreak) {
+
+    if (isComponent) {
       context = addBuffer(`\n`, context);
+      context = translateInstancePreview(node, document, node.id, context, false);
     }
   }
   return context;
 };
 
+const translateInstancePreview = (node: Node, document: Document, componentId: string, context: TranslateContext, includeClasses: boolean = true) => {
+  context = addBuffer(`<${getPreviewComponentName(componentId, document)}`, context);
+  if (includeClasses) {
+    context = addBuffer(` className="${getNodeClassName(node)}"`, context);
+  }
+  for (const textNode of getAllTextNodes(node)) {
+    context = addBuffer(` ${getUniqueNodeName(textNode)}_text="${textNode.characters}"`, context);
+  }
+  context = addBuffer(` />\n`, context);
+  return context;
+};
 
-const translateStyles = (file, context: TranslateContext) => {
-  const allNodes: Node[] = flattenNodes(file.document);
+
+const translateStyles = (document: Node, context: TranslateContext) => {
+  const allNodes: Node[] = flattenNodes(document);
   context = addBuffer(`<style>\n`, context);
   context = startBlock(context);
   for (const node of allNodes) {
     if (node.type === NodeType.Document || node.type === NodeType.Canvas) {
       continue;
     }
-    context = addBuffer(`.${getNodeClassName(node)} {\n`, context);
+    context = addBuffer(`:global(.${getNodeClassName(node)}) {\n`, context);
     context = addVectorPropStyles(node, context);
     context = addBuffer(`}\n\n`, context);
   }

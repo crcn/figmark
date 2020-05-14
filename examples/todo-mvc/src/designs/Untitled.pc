@@ -3,34 +3,34 @@
 <!-- STYLES -->
 
 <style>
-  ._frame_1_15_2 {
+  :global(._frame_1_15_2) {
   }
 
-  ._button_18_3 {
+  :global(._button_18_3) {
   }
 
-  ._rectangle_1_I18_3_15_3 {
+  :global(._rectangle_1_I18_3_15_3) {
   }
 
-  ._renamed_I18_3_15_4 {
+  :global(._renamed_I18_3_15_4) {
   }
 
-  ._button_18_6 {
+  :global(._button_18_6) {
   }
 
-  ._rectangle_1_I18_6_15_3 {
+  :global(._rectangle_1_I18_6_15_3) {
   }
 
-  ._blahhh_I18_6_15_4 {
+  :global(._blahhh_I18_6_15_4) {
   }
 
-  ._button_18_2 {
+  :global(._button_18_2) {
   }
 
-  ._rectangle_1_15_3 {
+  :global(._rectangle_1_15_3) {
   }
 
-  ._hello_world_15_4 {
+  :global(._hello_world_15_4) {
   }
 
 </style>
@@ -57,27 +57,17 @@
 <!-- PREVIEWS -->
 
 <Frame1>
-  <Button>
-    <Rectangle1>
-    </Rectangle1>
-    <Renamed>
-      Hello World
-    </Renamed>
-  </Button>
-  <Button>
-    <Rectangle1>
-    </Rectangle1>
-    <Blahhh>
-      BLAHHH
-    </Blahhh>
-  </Button>
+  <_Button182 className="_button_18_3" renamed_I18_3_15_4_text="Hello World" />
+  <_Button182 className="_button_18_6" blahhh_I18_6_15_4_text="BLAHHH" />
 </Frame1>
 
-<Button>
+<Button component as="_Button182">
   <Rectangle1>
   </Rectangle1>
   <HelloWorld>
-    Hello World
+    {_hello_world_15_4_text}
   </HelloWorld>
 </Button>
+
+<_Button182 hello_world_15_4_text="Hello World" />
 

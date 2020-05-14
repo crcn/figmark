@@ -23,6 +23,7 @@ export enum NodeType {
   Frame = "FRAME",
   Vector = "VECTOR",
   Instance = "INSTANCE",
+  Component = "COMPONENT",
   Text = "TEXT"
 };
 
@@ -127,10 +128,14 @@ export type Instance = {
   componentId: string
 } & FrameProps & BaseNode<NodeType.Instance>;
 
+export type Component = {
+
+} & FrameProps & BaseNode<NodeType.Component>;
+
 type VectorLikeNode = Frame | VectorNode | RectangleNode;
 export type Exportable = Frame | VectorNode | RectangleNode;
 export type Parent = Frame | GroupNode | Document | Canvas | Instance;
-export type Node = Document | Canvas | GroupNode | Frame | VectorNode | RectangleNode | Instance | Text;
+export type Node = Document | Canvas | GroupNode | Frame | VectorNode | RectangleNode | Instance | Text | Component;
 
 export const hasVectorProps = (node: Node): node is VectorLikeNode => {
   return node.type === NodeType.Frame || node.type == NodeType.Rectangle || node.type == NodeType.Vector;
@@ -146,12 +151,21 @@ export const flattenNodes = memoize((node: Node): Node[] => {
   return flattenNodes2(node)
 }) as (node: Node) => Node[];
 
+export const getNodeById = memoize((nodeId: string, document: Document): Node => {
+  return flattenNodes(document).find(node => node.id === nodeId);
+});
+
+export const getAllTextNodes = memoize((parent: Node): Text[] => {
+  return flattenNodes(parent).filter(node => node.type === NodeType.Text) as Text[];
+}) as (parent: Node) => Text[];
+
 export const hasChildren = (node: Node): node is Parent => {
   return (node as any).children?.length > 0;
 }
 
 export const getNodeExportFileName = (node: Node, settings: ExportSettings) => `node-${getUniqueNodeName(node)}@${settings.constraint.value}.${settings.constraint.type.toLowerCase()}`
-export const getUniqueNodeName = (node: Node) => `${snakeCase(node.name)}_${node.id.replace(/[:;]/g, "_")}`;
+export const getUniqueNodeName = (node: Node) => `${snakeCase(node.name)}_${cleanupNodeId(node.id)}`;
+export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "_")
 
 const flattenNodes2 = (node: Node, allNodes: Node[] = []) => {
   allNodes.push(node);
