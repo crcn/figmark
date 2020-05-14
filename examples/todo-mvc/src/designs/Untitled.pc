@@ -4,33 +4,28 @@
 
 <style>
   :global(._button_18_2) {
-  }
+    & > ._rectangle_1_15_3 {
+      background: rgba(196.00000351667404, 196.00000351667404, 196.00000351667404, 1);
+    }
 
-  :global(._rectangle_1_15_3) {
-  }
-
-  :global(._free_tacos_15_4) {
   }
 
   :global(._frame_1_20_8) {
-  }
+    background: rgba(255, 255, 255, 1);
+    & > ._button_20_9 {
+      & > ._rectangle_1_I20_9_15_3 {
+        background: rgba(196.00000351667404, 196.00000351667404, 196.00000351667404, 1);
+      }
 
-  :global(._button_20_9) {
-  }
+    }
 
-  :global(._rectangle_1_I20_9_15_3) {
-  }
+    & > ._button_20_12 {
+      & > ._rectangle_1_I20_12_15_3 {
+        background: rgba(196.00000351667404, 196.00000351667404, 196.00000351667404, 1);
+      }
 
-  :global(._nice_I20_9_15_4) {
-  }
+    }
 
-  :global(._button_20_12) {
-  }
-
-  :global(._rectangle_1_I20_12_15_3) {
-  }
-
-  :global(._nice_I20_12_15_4) {
   }
 
 </style>

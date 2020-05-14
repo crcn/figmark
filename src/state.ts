@@ -34,7 +34,11 @@ export type BaseNode<TType extends string> = {
 };
 
 export type Color = {};
-export type Paint = {};
+export type Paint = {
+  blendMode: string,
+  type: string,
+  color: Color
+};
 export type LayoutConstraint = {};
 export type EasingType = {};
 export type Rectangle = {

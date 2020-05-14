@@ -1,6 +1,8 @@
 import { createTranslateContext, TranslateContext, addBuffer, startBlock, endBlock } from "./translate-utils";
-import {Node, NodeType, VectorNodeProps, hasVectorProps, flattenNodes, getUniqueNodeName, hasChildren, Document, cleanupNodeId, getNodeById, getAllTextNodes} from "./state";
+import {Node, NodeType, hasVectorProps, flattenNodes, getUniqueNodeName, hasChildren, Document, cleanupNodeId, getNodeById, getAllTextNodes} from "./state";
 import { pascalCase } from "./utils";
+const memoize = require("fast-memoize");
+
 
 
 export const translateFigmaProjectToPaperclip = (file) => {
@@ -77,9 +79,6 @@ const getPreviewComponentName = (nodeId: string, document: Document) => "_" + pa
 
 const translatePreview = (node: Node, document: Document, context: TranslateContext, inComponent?: boolean) => {
 
-
-
-
   if (node.type === NodeType.Instance) {
     context = translateInstancePreview(node, document, node.componentId, context);
   } else {
@@ -131,20 +130,46 @@ const translateInstancePreview = (node: Node, document: Document, componentId: s
 };
 
 
-const translateStyles = (document: Node, context: TranslateContext) => {
+const translateStyles = (document: Document, context: TranslateContext) => {
   const allNodes: Node[] = flattenNodes(document);
   context = addBuffer(`<style>\n`, context);
   context = startBlock(context);
-  for (const node of allNodes) {
-    if (node.type === NodeType.Document || node.type === NodeType.Canvas) {
-      continue;
-    }
-    context = addBuffer(`:global(.${getNodeClassName(node)}) {\n`, context);
-    context = addVectorPropStyles(node, context);
-    context = addBuffer(`}\n\n`, context);
+  for (const node of document.children) {
+    context = translateClassNames(getNestedCSSStyles(node, document, node.type === NodeType.Instance ? node.componentId : null), context, false);
   }
   context = endBlock(context);
   context = addBuffer(`</style>\n\n`, context);
+  return context
+}
+
+const translateClassNames = (info: ComputedNestedStyleInfo, context: TranslateContext, isNested: boolean, instanceOfId?: string) => {
+  if (info.node.type === NodeType.Canvas) {
+    return info.children.reduce((context, childInfo) => translateClassNames(childInfo, context, false), context);
+  }
+
+  if (!containsStyle(info)) {
+    return context;
+  }
+
+  if (isNested) {
+    context = addBuffer(`& > .${getNodeClassName(info.node)} {\n`, context);
+  } else {
+    context = addBuffer(`:global(.${getNodeClassName(info.node)}) {\n`, context);
+  }
+
+  context = startBlock(context);
+
+  // TODO - for component instances, filter out props that match
+  // component props
+  
+  // TODO - get CSS props ins
+  for (const key in info.style) {
+    context = addBuffer(`${key}: ${info.style[key]};\n`, context);
+  }
+
+  context = info.children.reduce((context, child) => translateClassNames(child, context, true), context);
+  context = endBlock(context);
+  context = addBuffer(`}\n\n`, context);
   return context
 }
 
@@ -154,18 +179,54 @@ const getNodeClassName = (node: Node) => {
 }
 
 
-
 // TODO - need to use compoennt name
 const getNodeComponentName = (node: Node) => {
   return pascalCase(node.name);
 }
 
-const addVectorPropStyles = ({ opacity, fills, absoluteBoundingBox }: Partial<VectorNodeProps>, context: TranslateContext) => {
-  if (opacity != null) {
-    context = addBuffer(`opacity: ${opacity};\n`, context);
+
+export type ComputedNestedStyleInfo = {
+  node: Node,
+  style: Record<string, string | number>,
+  children: ComputedNestedStyleInfo[]
+};
+
+const getNestedCSSStyles = (node: Node, document: Document, instanceOfId?: string): ComputedNestedStyleInfo => {
+  const nodeStyle = getCSSStyle(node, document, instanceOfId);
+  return {
+    node, 
+    style: nodeStyle,
+    children: hasChildren(node) ? node.children.map(child => {
+      return getNestedCSSStyles(child, document, instanceOfId)
+    }) : []
+  };
+};
+
+const containsStyle = memoize((info: ComputedNestedStyleInfo, document: Document, instanceOfId?: string) => {
+  if (Object.keys(info.style).length > 0) {
+    return true;
   }
-  for (const fill of fills) {
-    
+  for (const child of info.children) {
+    if (containsStyle(child, document, instanceOfId)) {
+      return true;
+    }
   }
-  return context;
+  return false;
+});
+
+const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
+  const style: Record<string, string | number> = {};
+  if (hasVectorProps(node)) {
+    if (node.opacity != null) {
+      style.opacity = node.opacity;
+    }
+
+    for (const fill of node.fills) {
+      if (fill.type === 'SOLID') {
+        const {r, g, b, a} = fill.color as any;
+        style.background = `rgba(${r * 255}, ${g * 255}, ${b * 255}, ${a})`;
+      }
+    }
+  }
+  return style;
 };
