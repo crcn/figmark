@@ -1,0 +1,96 @@
+
+
+<!-- STYLES -->
+
+<style>
+  ._screen_shot_2020_05_13_at_1_55_1 {
+  }
+
+  ._rectangle_1 {
+  }
+
+  ._screen_shot_2020_05_13_at_3_24_1 {
+  }
+
+  ._rectangle_2 {
+  }
+
+  ._screen_shot_2020_05_13_at_12_27_1 {
+  }
+
+  ._rectangle_3 {
+  }
+
+</style>
+
+
+<!-- COMPONENTS -->
+
+<div export component as="ScreenShot20200513At1551" class="_screen_shot_2020_05_13_at_1_55_1 {className?}">
+  {children}
+</div>
+
+<div export component as="Rectangle1" class="_rectangle_1 {className?}">
+  {children}
+</div>
+
+<div export component as="ScreenShot20200513At3241" class="_screen_shot_2020_05_13_at_3_24_1 {className?}">
+  {children}
+</div>
+
+<div export component as="Rectangle2" class="_rectangle_2 {className?}">
+  {children}
+</div>
+
+<div export component as="Group2" class="_group_2 {className?}">
+  {children}
+</div>
+
+<div export component as="Frame1" class="_frame_1 {className?}">
+  {children}
+</div>
+
+<div export component as="Group1" class="_group_1 {className?}">
+  {children}
+</div>
+
+<div export component as="ScreenShot20200513At12271" class="_screen_shot_2020_05_13_at_12_27_1 {className?}">
+  {children}
+</div>
+
+<div export component as="Rectangle3" class="_rectangle_3 {className?}">
+  {children}
+</div>
+
+<div export component as="Text" class="_text {className?}">
+  {children}
+</div>
+
+<!-- PREVIEWS -->
+
+<ScreenShot20200513At1551>
+</ScreenShot20200513At1551>
+
+<Rectangle1>
+</Rectangle1>
+
+<ScreenShot20200513At3241>
+</ScreenShot20200513At3241>
+
+<Rectangle2>
+</Rectangle2>
+
+<Group2>
+  <Frame1>
+    <Group1>
+      <ScreenShot20200513At12271>
+      </ScreenShot20200513At12271>
+    </Group1>
+  </Frame1>
+  <Rectangle3>
+  </Rectangle3>
+</Group2>
+
+<Text>
+</Text>
+
