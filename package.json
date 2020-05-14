@@ -6,6 +6,11 @@
   "bin": {
     "figmark": "./bin/figmark"
   },
+  "husky": {
+    "hooks": {
+      "pre-commit": "pretty-quick --staged"
+    }
+  },
   "scripts": {
     "test": "",
     "build": "tsc"
@@ -13,6 +18,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "husky": "^4.2.5",
+    "pretty-quick": "^2.0.1",
     "typescript": "^3.9.2"
   },
   "dependencies": {

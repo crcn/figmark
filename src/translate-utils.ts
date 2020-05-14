@@ -1,5 +1,3 @@
-
-
 export type TranslateContext = {
   buffer: string;
   lineNumber: number;
@@ -16,7 +14,7 @@ export const createTranslateContext = (
   isNewLine: true,
   lineNumber: 0,
   indent,
-  keyCount: 0
+  keyCount: 0,
 });
 
 export const addBuffer = (buffer: string, context: TranslateContext) => ({
@@ -25,15 +23,15 @@ export const addBuffer = (buffer: string, context: TranslateContext) => ({
     context.buffer +
     (context.isNewLine ? context.indent.repeat(context.lineNumber) : "") +
     buffer,
-  isNewLine: buffer.lastIndexOf("\n") === buffer.length - 1
+  isNewLine: buffer.lastIndexOf("\n") === buffer.length - 1,
 });
 
 export const startBlock = (context: TranslateContext) => ({
   ...context,
-  lineNumber: context.lineNumber + 1
+  lineNumber: context.lineNumber + 1,
 });
 
 export const endBlock = (context: TranslateContext) => ({
   ...context,
-  lineNumber: context.lineNumber - 1
+  lineNumber: context.lineNumber - 1,
 });
