@@ -124,7 +124,7 @@ const translateInstancePreview = (node: Node, document: Document, componentId: s
     context = addBuffer(` className="${getNodeClassName(node)}"`, context);
   }
   for (const textNode of getAllTextNodes(node)) {
-    context = addBuffer(` ${getUniqueNodeName(textNode)}_text="${textNode.characters}"`, context);
+    context = addBuffer(` ${getUniqueNodeName(textNode)}_text=${JSON.stringify(textNode.characters)}`, context);
   }
   context = addBuffer(` />\n`, context);
   return context;
