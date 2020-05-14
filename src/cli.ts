@@ -26,25 +26,14 @@ const WATCH_TIMEOUT = 1000 * 5;
 const configFilePath = path.join(cwd, CONFIG_FILE_NAME);
 
 export const init = async () => {
-  const {
-    personalAccessToken,
-    fileKey,
-    fileVersion,
-    teamId,
-    dest,
-  } = await inquirer.prompt([
+  const { personalAccessToken, teamId, dest } = await inquirer.prompt([
     {
       name: "personalAccessToken",
       message: "What's your Figma personal access token?",
     },
     {
-      name: "fileKey",
-      message: "What's the file key that you'd like to use?",
-    },
-    {
-      name: "fileVersion",
-      default: undefined,
-      message: "Is there a specific file version you'd like to use? (optional)",
+      name: "teamId",
+      message: "What's your team ID?",
     },
     {
       name: "dest",
@@ -56,8 +45,7 @@ export const init = async () => {
   const config: Config = {
     dest,
     personalAccessToken,
-    files: [{ key: fileKey, version: fileVersion || undefined }],
-    teamIds: teamId ? [teamId] : teamId,
+    teamId: teamId,
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
@@ -79,14 +67,19 @@ export const sync = async ({ watch }: SyncOptions) => {
 
   console.log("Syncing with Figma...");
 
-  const { personalAccessToken, files, dest }: Config = readConfigSync(
+  const { personalAccessToken, dest, teamId }: Config = readConfigSync(
     process.cwd()
   );
 
   const client = new Figma.Api({ personalAccessToken });
 
-  for (const file of files) {
-    await downloadFile(client, file, dest);
+  const res = await client.getTeamProjects(teamId);
+  for (const project of res.projects) {
+    const pres = await client.getProjectFiles(String(project.id));
+    for (const file of pres.files) {
+      console.log(`Downloading project: ${file.name}`);
+      await downloadFile(client, file.key, dest);
+    }
   }
 
   if (watch) {
@@ -104,14 +97,17 @@ const EXTENSIONS = {
 
 const downloadFile = async (
   client: Figma.Api,
-  fileConfig: FileConfig,
+  fileKey: string,
   dest: string
 ) => {
   const destPath = path.join(process.cwd(), dest);
-  const file = await client.getFile(fileConfig.key, {
+  const file = await client.getFile(fileKey, {
     geometry: "paths",
-    version: fileConfig.version,
   });
+  // const res = await client.get
+
+  // console.log(JSON.stringify(file, null, 2));
+  // console.log(res);
   const filePath = path.join(destPath, `${file.name}${PC_FILE_EXTENSION}`);
 
   const pcContent = translateFigmaProjectToPaperclip(file);
@@ -125,10 +121,10 @@ const downloadFile = async (
   // }
 
   fs.writeFileSync(filePath, pcContent);
-  await downloadImages(client, fileConfig.key, destPath);
+  await downloadImages(client, fileKey, destPath);
   await downloadNodeImages(
     client,
-    fileConfig.key,
+    fileKey,
     file.document as Document,
     destPath
   );

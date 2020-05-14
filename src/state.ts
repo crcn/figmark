@@ -10,14 +10,9 @@ export type FileConfig = {
 };
 
 export type Config = {
-  files: FileConfig[];
-  teamIds: string[];
+  teamId?: string;
   personalAccessToken: string;
   dest: string;
-
-  // figmark-compiler-react, figmark-compiler-vue.
-  // Is this is undefined, then Figmark will automatically pick an already installed compiler
-  compiler?: string;
 };
 
 // based on https://www.figma.com/developers/api
