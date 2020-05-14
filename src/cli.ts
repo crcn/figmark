@@ -6,7 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as fsa from "fs-extra";
 import * as https from "https";
-import { Config, readConfigSync, flattenNodes, hasVectorProps, isExported, ExportSettings, getNodeExportFileName } from "./state";
+import { Config, readConfigSync, flattenNodes,Node, hasVectorProps, isExported, ExportSettings, getNodeExportFileName } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import {Document} from "./state";
 const memoize = require("fast-memoize");
@@ -111,7 +111,7 @@ const downloadNodeImages = async (client: Figma.Api, fileKey: string, document: 
 
   const nodeIdsByExport: Record<string, {
     settings: ExportSettings,
-    ids: string[]
+    nodes: Record<string, Node>
   }> = {};
   
   for (const child of allNodes) {
@@ -132,23 +132,23 @@ const downloadNodeImages = async (client: Figma.Api, fileKey: string, document: 
         const key = settings.format + settings.constraint.type + settings.constraint.value;
 
         if (!nodeIdsByExport[key]) {
-          nodeIdsByExport[key] = { settings, ids: [] }
+          nodeIdsByExport[key] = { settings, nodes: {} }
         }
-        nodeIdsByExport[key].ids.push(child.id);
+        nodeIdsByExport[key].nodes[child.id] = child;
       }
     }
   }
 
   for (const key in nodeIdsByExport) {
-    const { settings, ids } = nodeIdsByExport[key];
+    const { settings, nodes } = nodeIdsByExport[key];
     const result = await client.getImage(fileKey, {
-      ids: ids.join(","),
+      ids: Object.keys(nodes).join(","),
       format: settings.format.toLowerCase() as any,
       scale: settings.constraint.value,
     });
 
     for (const nodeId in result.images) {
-      await downloadImageRef(client, destPath, getNodeExportFileName(nodeId, settings).split(".").shift(), result.images[nodeId]);
+      await downloadImageRef(client, destPath, getNodeExportFileName(nodes[nodeId], settings).split(".").shift(), result.images[nodeId]);
     }
   }
 }
@@ -177,10 +177,6 @@ const downloadImageRef = (client: Figma.Api, destPath: string, name: string, url
     })
   });
 }
-type BuildOptions = {
-  definition: boolean
-};
-
 
 const logWarning = (text: string) => {
   console.warn(`⚠️  ${text}`);

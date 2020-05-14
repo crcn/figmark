@@ -21,7 +21,9 @@ export enum NodeType {
   Canvas = "CANVAS",
   Group = "GROUP",
   Frame = "FRAME",
-  Vector = "VECTOR"
+  Vector = "VECTOR",
+  Instance = "INSTANCE",
+  Text = "TEXT"
 };
 
 export type BaseNode<TType extends string> = {
@@ -97,6 +99,10 @@ export type Canvas = {
   children: Node[]
 } & BaseNode<NodeType.Canvas>;
 
+export type Text = {
+  characters: string,
+  style: Object
+} & VectorNodeProps & BaseNode<NodeType.Text>;
 
 export type GroupNode = {
   children: Node[]
@@ -111,14 +117,20 @@ export type RectangleNode = {
   rectangleCornerRadii: number[]
 } & VectorNodeProps & BaseNode<NodeType.Rectangle>;
 
-
-export type Frame = {
+type FrameProps = {
   children: Node[]
-} & VectorNodeProps & BaseNode<NodeType.Frame>;
+} & VectorNodeProps;
+
+export type Frame = FrameProps & BaseNode<NodeType.Frame>;
+
+export type Instance = {
+  componentId: string
+} & FrameProps & BaseNode<NodeType.Instance>;
 
 type VectorLikeNode = Frame | VectorNode | RectangleNode;
 export type Exportable = Frame | VectorNode | RectangleNode;
-export type Node = Document | Canvas | GroupNode | Frame | VectorNode | RectangleNode;
+export type Parent = Frame | GroupNode | Document | Canvas | Instance;
+export type Node = Document | Canvas | GroupNode | Frame | VectorNode | RectangleNode | Instance | Text;
 
 export const hasVectorProps = (node: Node): node is VectorLikeNode => {
   return node.type === NodeType.Frame || node.type == NodeType.Rectangle || node.type == NodeType.Vector;
@@ -134,7 +146,12 @@ export const flattenNodes = memoize((node: Node): Node[] => {
   return flattenNodes2(node)
 }) as (node: Node) => Node[];
 
-export const getNodeExportFileName = (nodeId: string, settings: ExportSettings) => `node-${nodeId.replace(":", "-")}@${settings.constraint.value}.${settings.constraint.type.toLowerCase()}`
+export const hasChildren = (node: Node): node is Parent => {
+  return (node as any).children?.length > 0;
+}
+
+export const getNodeExportFileName = (node: Node, settings: ExportSettings) => `node-${getUniqueNodeName(node)}@${settings.constraint.value}.${settings.constraint.type.toLowerCase()}`
+export const getUniqueNodeName = (node: Node) => `${snakeCase(node.name)}_${node.id.replace(/[:;]/g, "_")}`;
 
 const flattenNodes2 = (node: Node, allNodes: Node[] = []) => {
   allNodes.push(node);

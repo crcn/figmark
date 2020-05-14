@@ -3,22 +3,34 @@
 <!-- STYLES -->
 
 <style>
-  ._frame_1 {
+  ._frame_1_15_2 {
   }
 
-  ._rectangle_1 {
+  ._button_18_3 {
   }
 
-  ._hello_world {
+  ._rectangle_1_I18_3_15_3 {
   }
 
-  ._group_1 {
+  ._renamed_I18_3_15_4 {
   }
 
-  ._vector_1 {
+  ._button_18_6 {
   }
 
-  ._vector_2 {
+  ._rectangle_1_I18_6_15_3 {
+  }
+
+  ._blahhh_I18_6_15_4 {
+  }
+
+  ._button_18_2 {
+  }
+
+  ._rectangle_1_15_3 {
+  }
+
+  ._hello_world_15_4 {
   }
 
 </style>
@@ -26,40 +38,46 @@
 
 <!-- COMPONENTS -->
 
-<div export component as="Frame1" class="_frame_1 {className?}">
+<div export component as="Frame1" class="_frame_1_15_2 {className?}">
   {children}
 </div>
 
-<div export component as="Rectangle1" class="_rectangle_1 {className?}">
+<div export component as="Button" class="_button_18_2 {className?}">
   {children}
 </div>
 
-<div export component as="HelloWorld" class="_hello_world {className?}">
+<div export component as="Rectangle1" class="_rectangle_1_15_3 {className?}">
   {children}
 </div>
 
-<div export component as="Group1" class="_group_1 {className?}">
+<span export component as="HelloWorld" class="_hello_world_15_4 {className?}">
   {children}
-</div>
-
-<svg export component as="Vector1" class="_vector_1 {className?}">
-</svg>
-
-<svg export component as="Vector2" class="_vector_2 {className?}">
-</svg>
+</span>
 
 <!-- PREVIEWS -->
 
 <Frame1>
+  <Button>
+    <Rectangle1>
+    </Rectangle1>
+    <Renamed>
+      Hello World
+    </Renamed>
+  </Button>
+  <Button>
+    <Rectangle1>
+    </Rectangle1>
+    <Blahhh>
+      BLAHHH
+    </Blahhh>
+  </Button>
+</Frame1>
+
+<Button>
   <Rectangle1>
   </Rectangle1>
   <HelloWorld>
+    Hello World
   </HelloWorld>
-  <Group1>
-    <Vector1>
-    </Vector1>
-    <Vector2>
-    </Vector2>
-  </Group1>
-</Frame1>
+</Button>
 

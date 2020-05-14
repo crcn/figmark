@@ -1,6 +1,5 @@
 import { createTranslateContext, TranslateContext, addBuffer, startBlock, endBlock } from "./translate-utils";
-import {Node, NodeType, Document, VectorNodeProps, hasVectorProps, flattenNodes} from "./state";
-import {snakeCase, camelCase} from "lodash";
+import {Node, NodeType, VectorNodeProps, hasVectorProps, flattenNodes, getUniqueNodeName, hasChildren} from "./state";
 import { pascalCase } from "./utils";
 
 
@@ -15,22 +14,30 @@ export const translateFigmaProjectToPaperclip = (file) => {
 
   context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
   context = translatePreview(file.document, context);
+  // console.log(JSON.stringify(file, null, 2));
   console.log(context.buffer);
+  // console.log(JSON.stringify(file, null, 2));
   return context.buffer;
 }
 
 const translateComponents = (node: Node, context: TranslateContext) => {
-  const allNodes: Node[] = flattenNodes(node);
-  for (const child of allNodes) {
-    if (child.type === NodeType.Document || child.type === NodeType.Canvas) {
-      continue;
-    }
-    context = translateComponent(child, context);
+  context = translateComponent(node, context);
+
+  if (!hasChildren(node) || node.type === NodeType.Instance) {
+    return context;
+  }
+
+  for (const child of node.children) {
+    context = translateComponents(child, context);
   }
   return context;
 };
 
 const translateComponent = (node: Node, context: TranslateContext) => {
+  if (node.type === NodeType.Document || node.type === NodeType.Canvas || node.type === NodeType.Instance) {
+    return context;
+  }
+
   const componentName = getNodeComponentName(node);
   if (node.type === NodeType.Vector) {
     context = addBuffer(`<svg export component as="${componentName}" class="${getNodeClassName(node)} {className?}">\n`, context);
@@ -39,11 +46,13 @@ const translateComponent = (node: Node, context: TranslateContext) => {
     context = endBlock(context);
     context = addBuffer(`</svg>\n\n`, context);
   } else {
-    context = addBuffer(`<div export component as="${componentName}" class="${getNodeClassName(node)} {className?}">\n`, context);
+    const tagName = node.type === NodeType.Text ? `span` : `div`;
+
+    context = addBuffer(`<${tagName} export component as="${componentName}" class="${getNodeClassName(node)} {className?}">\n`, context);
     context = startBlock(context);
     context = addBuffer(`{children}\n`, context);
     context = endBlock(context);
-    context = addBuffer(`</div>\n\n`, context);
+    context = addBuffer(`</${tagName}>\n\n`, context);
   }
   return context;
 }
@@ -56,10 +65,13 @@ const translatePreview = (node: Node, context: TranslateContext, extraLineBreak:
     context = addBuffer(`<${getNodeComponentName(node)}>\n`, context);
     context = startBlock(context);
   }
-  if (node.type === NodeType.Document || node.type === NodeType.Canvas || node.type === NodeType.Frame || node.type === NodeType.Group) {
+  if (hasChildren(node)) {
     for (const child of node.children) {
       context = translatePreview(child, context, !shouldIncludeTag);
     }
+  }
+  if (node.type === NodeType.Text) {
+    context = addBuffer(`${node.characters}\n`, context);
   }
   if (shouldIncludeTag) {
     context = endBlock(context);
@@ -91,8 +103,9 @@ const translateStyles = (file, context: TranslateContext) => {
 
 // TODO - need to use compoennt name
 const getNodeClassName = (node: Node) => {
-  return "_" + snakeCase(node.name);
+  return `_${getUniqueNodeName(node)}`
 }
+
 
 
 // TODO - need to use compoennt name
