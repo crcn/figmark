@@ -15,10 +15,10 @@ import {
   isExported,
   ExportSettings,
   getNodeExportFileName,
+  FileConfig,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
-const memoize = require("fast-memoize");
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -26,12 +26,13 @@ const WATCH_TIMEOUT = 1000 * 5;
 const configFilePath = path.join(cwd, CONFIG_FILE_NAME);
 
 export const init = async () => {
-  const { personalAccessToken, fileKey, dest } = await inquirer.prompt([
-    {
-      name: "dest",
-      default: "./src/designs",
-      message: "Where would you like the Figma files to live?",
-    },
+  const {
+    personalAccessToken,
+    fileKey,
+    fileVersion,
+    teamId,
+    dest,
+  } = await inquirer.prompt([
     {
       name: "personalAccessToken",
       message: "What's your Figma personal access token?",
@@ -40,12 +41,23 @@ export const init = async () => {
       name: "fileKey",
       message: "What's the file key that you'd like to use?",
     },
+    {
+      name: "fileVersion",
+      default: undefined,
+      message: "Is there a specific file version you'd like to use? (optional)",
+    },
+    {
+      name: "dest",
+      default: "./src/designs",
+      message: "Where would you like the Figma files to live?",
+    },
   ]);
 
-  const config = {
+  const config: Config = {
     dest,
     personalAccessToken,
-    fileKeys: [fileKey],
+    files: [{ key: fileKey, version: fileVersion || undefined }],
+    teamIds: teamId ? [teamId] : teamId,
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
@@ -67,13 +79,14 @@ export const sync = async ({ watch }: SyncOptions) => {
 
   console.log("Syncing with Figma...");
 
-  const { personalAccessToken, fileKeys, dest }: Config = readConfigSync(
+  const { personalAccessToken, files, dest }: Config = readConfigSync(
     process.cwd()
   );
 
   const client = new Figma.Api({ personalAccessToken });
-  for (const fileKey of fileKeys) {
-    await downloadFile(client, fileKey, dest);
+
+  for (const file of files) {
+    await downloadFile(client, file, dest);
   }
 
   if (watch) {
@@ -91,11 +104,14 @@ const EXTENSIONS = {
 
 const downloadFile = async (
   client: Figma.Api,
-  fileKey: string,
+  fileConfig: FileConfig,
   dest: string
 ) => {
   const destPath = path.join(process.cwd(), dest);
-  const file = await client.getFile(fileKey, { geometry: "paths" });
+  const file = await client.getFile(fileConfig.key, {
+    geometry: "paths",
+    version: fileConfig.version,
+  });
   const filePath = path.join(destPath, `${file.name}${PC_FILE_EXTENSION}`);
 
   const pcContent = translateFigmaProjectToPaperclip(file);
@@ -109,10 +125,10 @@ const downloadFile = async (
   // }
 
   fs.writeFileSync(filePath, pcContent);
-  // await downloadImages(client, fileKey, destPath);
+  await downloadImages(client, fileConfig.key, destPath);
   await downloadNodeImages(
     client,
-    fileKey,
+    fileConfig.key,
     file.document as Document,
     destPath
   );

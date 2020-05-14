@@ -4,8 +4,14 @@ import { CONFIG_FILE_NAME } from "./constants";
 const memoize = require("fast-memoize");
 import { snakeCase } from "lodash";
 
+export type FileConfig = {
+  key: string;
+  version?: string;
+};
+
 export type Config = {
-  fileKeys: string[];
+  files: FileConfig[];
+  teamIds: string[];
   personalAccessToken: string;
   dest: string;
 
