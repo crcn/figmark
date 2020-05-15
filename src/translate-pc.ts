@@ -23,6 +23,12 @@ const memoize = require("fast-memoize");
 export const translateFigmaProjectToPaperclip = (file) => {
   let context = createTranslateContext();
 
+  context = addBuffer(`\n<!--\n`, context);
+  context = startBlock(context);
+  context = addBuffer(`!! AUTO GENERATED, EDIT WITH CAUTION !!\n`, context);
+  context = endBlock(context);
+  context = addBuffer(`-->`, context);
+
   context = addBuffer(`\n\n<!-- STYLES -->\n\n`, context);
   context = translateStyles(file.document, context);
 
