@@ -37,7 +37,7 @@ export const init = async () => {
     },
     {
       name: "dest",
-      default: "./src/designs",
+      default: "./src/design-generated",
       message: "Where would you like the Figma files to live?",
     },
   ]);
