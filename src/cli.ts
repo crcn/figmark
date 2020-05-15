@@ -11,17 +11,17 @@ import {
   readConfigSync,
   flattenNodes,
   Node,
-  hasVectorProps,
   isExported,
   ExportSettings,
   getNodeExportFileName,
-  FileConfig,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
+import { ProjectFile, Version } from "figma-api/lib/api-types";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
+const LATEST_VERSION_NAME = "latest";
 
 const configFilePath = path.join(cwd, CONFIG_FILE_NAME);
 
@@ -42,10 +42,22 @@ export const init = async () => {
     },
   ]);
 
+  const client = new Figma.Api({ personalAccessToken });
+
+  console.log("Fetching files...");
+
+  // const fileVersion = await getFileVes
+  const fileVersions = await getFileVersions(
+    client,
+    teamId,
+    () => LATEST_VERSION_NAME
+  );
+
   const config: Config = {
     dest,
     personalAccessToken,
     teamId: teamId,
+    fileVersions,
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
@@ -58,6 +70,34 @@ type SyncOptions = {
   watch?: boolean;
 };
 
+const defaultVersionGetter = (versions: Version[]) =>
+  versions.length > 0 ? versions[0].id : LATEST_VERSION_NAME;
+
+const getFileVersions = async (
+  client: Figma.Api,
+  teamId: string,
+  getVersion = defaultVersionGetter
+) => {
+  const files = await getTeamFiles(client, teamId);
+  const map = {};
+  for (const file of files) {
+    const { versions } = await client.getVersions(file.key);
+    map[file.key] = getVersion(versions);
+  }
+  return map;
+};
+
+const getTeamFiles = async (client: Figma.Api, teamId: string) => {
+  const allFiles: ProjectFile[] = [];
+  const { projects } = await client.getTeamProjects(teamId);
+  for (const project of projects) {
+    const { files } = await client.getProjectFiles(String(project.id));
+    allFiles.push(...files);
+  }
+
+  return allFiles;
+};
+
 export const sync = async ({ watch }: SyncOptions) => {
   if (!fs.existsSync(configFilePath)) {
     return console.error(
@@ -67,19 +107,20 @@ export const sync = async ({ watch }: SyncOptions) => {
 
   console.log("Syncing with Figma...");
 
-  const { personalAccessToken, dest, teamId }: Config = readConfigSync(
-    process.cwd()
-  );
+  const {
+    personalAccessToken,
+    dest,
+    teamId,
+    fileVersions,
+  }: Config = readConfigSync(process.cwd());
 
   const client = new Figma.Api({ personalAccessToken });
-
-  const res = await client.getTeamProjects(teamId);
-  for (const project of res.projects) {
-    const pres = await client.getProjectFiles(String(project.id));
-    for (const file of pres.files) {
-      console.log(`Downloading project: ${file.name}`);
-      await downloadFile(client, file.key, dest);
-    }
+  const files = await getTeamFiles(client, teamId);
+  for (const file of files) {
+    const fileVersion =
+      (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
+    console.log(`Downloading project: ${file.name}@${fileVersion}`);
+    await downloadFile(client, file.key, fileVersion, dest);
   }
 
   if (watch) {
@@ -98,16 +139,16 @@ const EXTENSIONS = {
 const downloadFile = async (
   client: Figma.Api,
   fileKey: string,
+  version: string,
   dest: string
 ) => {
   const destPath = path.join(process.cwd(), dest);
   const file = await client.getFile(fileKey, {
     geometry: "paths",
+    version: version === LATEST_VERSION_NAME ? undefined : version,
   });
   // const res = await client.get
 
-  // console.log(JSON.stringify(file, null, 2));
-  // console.log(res);
   const filePath = path.join(destPath, `${file.name}${PC_FILE_EXTENSION}`);
 
   const pcContent = translateFigmaProjectToPaperclip(file);

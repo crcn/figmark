@@ -13,6 +13,7 @@ export type Config = {
   teamId?: string;
   personalAccessToken: string;
   dest: string;
+  fileVersions?: Record<string, string>;
 };
 
 // based on https://www.figma.com/developers/api
