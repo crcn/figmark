@@ -79,75 +79,75 @@
 
 <!-- COMPONENTS -->
 
-<span export component as="ThisFileContainsYourColorStylesTheyAreAppliedToTheShapesInTheExamplesAboveYouCanUseThemAcrossAllYourFiles" class="_this_file_contains_your_color_styles_they_are_applied_to_the_shapes_in_the_examples_above_you_can_use_them_across_all_your_files_1_19 {className?}">
+<span export component as="ThisFileContainsYourColorStylesTheyAreAppliedToTheShapesInTheExamplesAboveYouCanUseThemAcrossAllYourFiles" className="_this_file_contains_your_color_styles_they_are_applied_to_the_shapes_in_the_examples_above_you_can_use_them_across_all_your_files_1_19 {className?}">
   {children}
 </span>
 
-<div export component as="Example" class="_example_1_2 {className?}">
+<div export component as="Example" className="_example_1_2 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_3 {className?}">
+<div export component as="Example" className="_example_1_3 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_4 {className?}">
+<div export component as="Example" className="_example_1_4 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_5 {className?}">
+<div export component as="Example" className="_example_1_5 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_6 {className?}">
+<div export component as="Example" className="_example_1_6 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_7 {className?}">
+<div export component as="Example" className="_example_1_7 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_8 {className?}">
+<div export component as="Example" className="_example_1_8 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_9 {className?}">
+<div export component as="Example" className="_example_1_9 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_10 {className?}">
+<div export component as="Example" className="_example_1_10 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_11 {className?}">
+<div export component as="Example" className="_example_1_11 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_12 {className?}">
+<div export component as="Example" className="_example_1_12 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_13 {className?}">
+<div export component as="Example" className="_example_1_13 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_14 {className?}">
+<div export component as="Example" className="_example_1_14 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_15 {className?}">
+<div export component as="Example" className="_example_1_15 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_16 {className?}">
+<div export component as="Example" className="_example_1_16 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_17 {className?}">
+<div export component as="Example" className="_example_1_17 {className?}">
   {children}
 </div>
 
-<div export component as="Example" class="_example_1_18 {className?}">
+<div export component as="Example" className="_example_1_18 {className?}">
   {children}
 </div>
 

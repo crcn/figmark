@@ -19,15 +19,15 @@
 
 <!-- COMPONENTS -->
 
-<div export component as="Frame1" class="_frame_1_1_2 {className?}">
+<div export component as="Frame1" className="_frame_1_1_2 {className?}">
   {children}
 </div>
 
-<div export component as="Rectangle1" class="_rectangle_1_1_3 {className?}">
+<div export component as="Rectangle1" className="_rectangle_1_1_3 {className?}">
   {children}
 </div>
 
-<span export component as="TestFigmark2" class="_test_figmark_2_1_4 {className?}">
+<span export component as="TestFigmark2" className="_test_figmark_2_1_4 {className?}">
   {children}
 </span>
 

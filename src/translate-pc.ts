@@ -68,7 +68,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
   const componentName = getNodeComponentName(node);
   if (node.type === NodeType.Vector) {
     context = addBuffer(
-      `<svg export component as="${componentName}" class="${getNodeClassName(
+      `<svg export component as="${componentName}" className="${getNodeClassName(
         node
       )} {className?}">\n`,
       context
@@ -81,7 +81,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
     const tagName = node.type === NodeType.Text ? `span` : `div`;
 
     context = addBuffer(
-      `<${tagName} export component as="${componentName}" class="${getNodeClassName(
+      `<${tagName} export component as="${componentName}" className="${getNodeClassName(
         node
       )} {className?}">\n`,
       context
