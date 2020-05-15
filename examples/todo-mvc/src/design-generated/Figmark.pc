@@ -8,7 +8,7 @@
 <style>
   :global(._frame_1_1_2) {
     background: rgba(255, 255, 255, 1);
-    & > ._rectangle_1_1_3 {
+    & > :global(._rectangle_1_1_3) {
       background: rgba(196.00000351667404, 196.00000351667404, 196.00000351667404, 1);
     }
 

@@ -232,13 +232,12 @@ const translateClassNames = (
     return context;
   }
 
+  const nodeSelector = `.${getNodeClassName(info.node)}`;
+
   if (isNested) {
-    context = addBuffer(`& > .${getNodeClassName(info.node)} {\n`, context);
+    context = addBuffer(`& > :global(${nodeSelector}) {\n`, context);
   } else {
-    context = addBuffer(
-      `:global(.${getNodeClassName(info.node)}) {\n`,
-      context
-    );
+    context = addBuffer(`:global(${nodeSelector}) {\n`, context);
   }
 
   context = startBlock(context);
