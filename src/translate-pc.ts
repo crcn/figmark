@@ -156,7 +156,10 @@ const translatePreview = (
       if (inComponent) {
         context = addBuffer(`{_${getUniqueNodeName(node)}_text}\n`, context);
       } else {
-        context = addBuffer(`${node.characters}\n`, context);
+        context = addBuffer(
+          `${translateTextCharacters(node.characters)}\n`,
+          context
+        );
       }
     } else if (hasChildren(node)) {
       for (const child of node.children) {
@@ -180,6 +183,10 @@ const translatePreview = (
   return context;
 };
 
+const translateTextCharacters = (characters: string) => {
+  return characters.replace(/[\n\r]+/g, " <br /> ");
+};
+
 const translateInstancePreview = (
   node: Node,
   document: Document,
@@ -196,9 +203,9 @@ const translateInstancePreview = (
   }
   for (const textNode of getAllTextNodes(node)) {
     context = addBuffer(
-      ` ${getUniqueNodeName(textNode)}_text=${JSON.stringify(
+      ` ${getUniqueNodeName(textNode)}_text={<>${translateTextCharacters(
         textNode.characters
-      )}`,
+      )}</>}`,
       context
     );
   }
@@ -326,7 +333,7 @@ const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
 
   if (node.type === NodeType.Text) {
     Object.assign(style, getPositionStyle(node));
-    Object.assign(style, translateTextStyle(node.style));
+    Object.assign(style, getTextStyle(node, node.style));
 
     const containsNonSolifFill = node.fills.some(
       (fill) => fill.type !== FillType.SOLID
@@ -436,7 +443,12 @@ const STYLE_MAP = {
   letterSpacing: "letter-spacing",
 };
 
-const translateTextStyle = (style: Record<string, string | number>) => {
+const TEXT_DECORATION_MAP = {
+  STRIKETHROUGH: "line-through",
+  UNDERLINE: "underline",
+};
+
+const getTextStyle = (node: Node, style: Record<string, string | number>) => {
   const newStyle = {};
 
   if (style.fontFamily) {
@@ -449,8 +461,30 @@ const translateTextStyle = (style: Record<string, string | number>) => {
     newStyle["font-size"] = style.fontSize + "px";
   }
   if (style.letterSpacing) {
-    newStyle["letter-spacing"] = style.letterSpacing;
+    newStyle["letter-spacing"] =
+      (Number(style.letterSpacing) / Number(style.fontSize)).toFixed(3) + "em";
   }
+
+  if (style.lineHeightPercentFontSize) {
+    newStyle["line-height"] =
+      Math.round(Number(style.lineHeightPercentFontSize)) + "%";
+  }
+
+  if (style.textAlignHorizontal) {
+    newStyle["text-align"] = String(style.textAlignHorizontal).toLowerCase();
+  }
+
+  if (style.textDecoration) {
+    newStyle["text-decoration"] = TEXT_DECORATION_MAP[
+      style.textDecoration
+    ].toLowerCase();
+  }
+
+  if (style.paragraphSpacing) {
+    logNodeWarning(node, `Cannot translate paragraph spacing to CSS`);
+  }
+
+  console.log(style);
 
   return newStyle;
 };
