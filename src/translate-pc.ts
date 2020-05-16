@@ -88,7 +88,7 @@ const translateComponent = (
     return context;
   }
 
-  const componentName = getNodeComponentName(node);
+  const componentName = getNodeComponentName(node, document);
   if (node.type === NodeType.Vector) {
     context = addBuffer(
       `<svg export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
@@ -154,7 +154,7 @@ const translatePreview = (
     );
   } else {
     context = addBuffer(
-      `<${getNodeComponentName(node)} withAbsoluteLayout`,
+      `<${getNodeComponentName(node, document)} withAbsoluteLayout`,
       context
     );
     const isComponent = node.type === NodeType.Component;
@@ -187,7 +187,10 @@ const translatePreview = (
       }
     }
     context = endBlock(context);
-    context = addBuffer(`</${getNodeComponentName(node)}>\n`, context);
+    context = addBuffer(
+      `</${getNodeComponentName(node, document)}>\n`,
+      context
+    );
 
     if (isComponent) {
       context = addBuffer(`\n`, context);
@@ -329,8 +332,8 @@ const getNodeClassName = (node: Node, document: Document) => {
 };
 
 // TODO - need to use compoennt name
-const getNodeComponentName = (node: Node) => {
-  return pascalCase(node.name);
+const getNodeComponentName = (node: Node, document: Document) => {
+  return pascalCase(getUniqueNodeName(node, document));
 };
 
 export type ComputedNestedStyleInfo = {
