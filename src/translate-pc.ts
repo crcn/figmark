@@ -10,6 +10,7 @@ import {
   Node,
   NodeType,
   hasVectorProps,
+  Text,
   flattenNodes,
   getUniqueNodeName,
   LinearGradient,
@@ -43,7 +44,7 @@ export const translateFigmaProjectToPaperclip = (file) => {
   context = addBuffer(`\n\n<!-- STYLES -->\n\n`, context);
   context = translateStyles(file.document, context);
 
-  context = addBuffer(`\n<!-- COMPONENTS -->\n\n`, context);
+  context = addBuffer(`\n<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
   context = translateComponents(file.document, context);
 
   context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
@@ -79,7 +80,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
   const componentName = getNodeComponentName(node);
   if (node.type === NodeType.Vector) {
     context = addBuffer(
-      `<svg export component as="${componentName}" className="${getNodeClassName(
+      `<svg export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
         node
       )} {className?}">\n`,
       context
@@ -92,7 +93,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
     const tagName = node.type === NodeType.Text ? `span` : `div`;
 
     context = addBuffer(
-      `<${tagName} export component as="${componentName}" className="${getNodeClassName(
+      `<${tagName} export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
         node
       )} {className?}">\n`,
       context
@@ -139,7 +140,10 @@ const translatePreview = (
       context
     );
   } else {
-    context = addBuffer(`<${getNodeComponentName(node)}`, context);
+    context = addBuffer(
+      `<${getNodeComponentName(node)} withAbsoluteLayout`,
+      context
+    );
     const isComponent = node.type === NodeType.Component;
 
     if (isComponent) {
@@ -195,7 +199,7 @@ const translateInstancePreview = (
   includeClasses: boolean = true
 ) => {
   context = addBuffer(
-    `<${getPreviewComponentName(componentId, document)}`,
+    `<${getPreviewComponentName(componentId, document)} withAbsoluteLayout`,
     context
   );
   if (includeClasses) {
@@ -265,8 +269,23 @@ const translateClassNames = (
 
   // TODO - get CSS props ins
   for (const key in info.style) {
+    if (isLayoutDeclaration(key)) {
+      continue;
+    }
     context = addBuffer(`${key}: ${info.style[key]};\n`, context);
   }
+
+  // ABS layout should be opt-in since it's non-responsive.
+  context = addBuffer(`&[data-with-absolute-layout] {\n`, context);
+  context = startBlock(context);
+  for (const key in info.style) {
+    if (isLayoutDeclaration(key)) {
+      context = addBuffer(`${key}: ${info.style[key]};\n`, context);
+    }
+  }
+
+  context = endBlock(context);
+  context = addBuffer(`}\n`, context);
 
   context = info.children.reduce(
     (context, child) => translateClassNames(child, context, true),
@@ -276,6 +295,9 @@ const translateClassNames = (
   context = addBuffer(`}\n\n`, context);
   return context;
 };
+
+const isLayoutDeclaration = (key: string) =>
+  /position|left|top|width|height/.test(key);
 
 // TODO - need to use compoennt name
 const getNodeClassName = (node: Node) => {
@@ -333,7 +355,7 @@ const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
 
   if (node.type === NodeType.Text) {
     Object.assign(style, getPositionStyle(node));
-    Object.assign(style, getTextStyle(node, node.style));
+    Object.assign(style, getTextStyle(node));
 
     const containsNonSolifFill = node.fills.some(
       (fill) => fill.type !== FillType.SOLID
@@ -448,8 +470,27 @@ const TEXT_DECORATION_MAP = {
   UNDERLINE: "underline",
 };
 
-const getTextStyle = (node: Node, style: Record<string, string | number>) => {
-  const newStyle = {};
+const TEXT_TRANSFORM_MAP = {
+  UPPER: "uppercase",
+  LOWER: "lowercase",
+  TITLE: "capitalize",
+};
+
+const LETTER_CASE_LABEL_MAP = {};
+
+const TEXT_ALIGN_VERTICAL_MAP = {
+  BOTTOM: "flex-end",
+  CENTER: "center",
+};
+
+const getTextStyle = (node: Text) => {
+  const style = node.style;
+  const newStyle: any = {};
+
+  if (style.textAlignVertical !== "TOP") {
+    newStyle.display = "flex";
+    newStyle["align-items"] = TEXT_ALIGN_VERTICAL_MAP[style.textAlignVertical];
+  }
 
   if (style.fontFamily) {
     newStyle["font-family"] = style.fontFamily;
@@ -480,11 +521,35 @@ const getTextStyle = (node: Node, style: Record<string, string | number>) => {
     ].toLowerCase();
   }
 
-  if (style.paragraphSpacing) {
-    logNodeWarning(node, `Cannot translate paragraph spacing to CSS`);
+  if (style.paragraphIndent) {
+    newStyle["text-indent"] =
+      Number(Number(style.paragraphIndent).toFixed(2)) + "px";
   }
 
-  console.log(style);
+  if (style.textCase) {
+    const transform = TEXT_TRANSFORM_MAP[style.textCase];
+    if (transform) {
+      newStyle["text-transform"] = transform;
+    } else {
+      logCannotConvertCssWarning(node, [
+        "Text",
+        "Letter Case",
+        "Case",
+        LETTER_CASE_LABEL_MAP[style.textCase] || style.textCase,
+      ]);
+    }
+  }
+
+  if (style.opentypeFlags) {
+    const fontFeatureSettings = Object.keys(style.opentypeFlags).map(
+      (key) => `"${key.toLowerCase()}" on`
+    );
+    newStyle["font-featutes-settings"] = fontFeatureSettings.join(", ");
+  }
+
+  if (style.paragraphSpacing) {
+    logCannotConvertCssWarning(node, ["Text", "Paragraph Spacing"]);
+  }
 
   return newStyle;
 };
@@ -517,3 +582,11 @@ const rgbToHex = (r: number, g: number, b: number) => {
 const logNodeWarning = (node: Node, message: string) => {
   logWarn(`Layer ${chalk.bold(node.name)}: ${message}`);
 };
+
+const highlightSectionInfo = (...path: string[]) =>
+  chalk.bold(path.join(" ► "));
+const logCannotConvertCssWarning = (node: Node, path: string[]) =>
+  logNodeWarning(
+    node,
+    `Cannot convert ${highlightSectionInfo(...path)} to CSS`
+  );
