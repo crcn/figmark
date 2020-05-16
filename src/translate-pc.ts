@@ -548,7 +548,7 @@ const getCSSStyle = memoize(
       Object.assign(style, getPositionStyle(node));
       Object.assign(style, getFrameStyle(node));
     } else {
-      logNodeWarning(node, `Can't generate styles for ${node.type}`);
+      // logNodeWarning(node, `Can't generate styles for ${node.type}`);
     }
 
     if (instance && node.type !== NodeType.Instance) {
