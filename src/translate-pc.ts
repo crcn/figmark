@@ -1,4 +1,5 @@
 // inspired by https://github.com/KarlRombauts/Figma-SCSS-Generator/blob/master/gradients.js
+// https://github.com/figma/figma-api-demo/blob/533d556c853fad731f65c5c264dd8adc0eaf1b1b/figma-to-react/lib/figma.js
 import {
   createTranslateContext,
   TranslateContext,
@@ -13,6 +14,7 @@ import {
   Text,
   flattenNodes,
   getUniqueNodeName,
+  RadialGradient,
   LinearGradient,
   Vector,
   hasChildren,
@@ -27,6 +29,7 @@ import {
   Fill,
   SolidFill,
   VectorNodeProps,
+  BaseNode,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -353,6 +356,8 @@ const containsStyle = memoize(
 const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
   const style: Record<string, string | number> = {};
 
+  console.log(JSON.stringify(node, null, 2));
+
   if (node.type === NodeType.Text) {
     Object.assign(style, getPositionStyle(node));
     Object.assign(style, getTextStyle(node));
@@ -374,6 +379,8 @@ const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
     }
   } else if (node.type === NodeType.Group) {
   } else if (node.type === NodeType.Rectangle) {
+    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getVectorStyle(node));
   } else if (node.type === NodeType.Frame) {
     Object.assign(style, getPositionStyle(node));
     Object.assign(style, getFrameStyle(node));
@@ -384,10 +391,44 @@ const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
   return style;
 };
 
-const getVectorStyle = (node: VectorNodeProps) => {
+const getVectorStyle = (node: VectorNodeProps & BaseNode<any>) => {
   const style: any = {};
   if (node.fills.length) {
-    style.background = getFillStyleValue(node.fills);
+    style.background = getFillStyleValue(node, node.fills);
+    const containsBlendModes = node.fills.some((fill) => {
+      return fill.blendMode !== "NORMAL";
+    });
+
+    if (containsBlendModes) {
+      style["background-blend-mode"] = node.fills
+        .map((fill) => {
+          return BLEND_MODE_MAP[fill.blendMode];
+        })
+        .join(", ");
+    }
+  }
+  if (node.blendMode && BLEND_MODE_MAP[node.blendMode]) {
+    style["mix-blend-mode"] = BLEND_MODE_MAP[node.blendMode];
+  }
+  if (node.strokes.length) {
+    const containsInvalidStroke =
+      node.strokes.some((stroke) => {
+        return stroke.type !== FillType.SOLID;
+      }) || node.strokes.length > 1;
+
+    const solidStroke = node.strokes.find(
+      (stroke) => stroke.type === FillType.SOLID
+    ) as SolidFill;
+
+    if (containsInvalidStroke) {
+      logNodeWarning(node, `Only one solid fill stroke is suppoered`);
+    }
+
+    if (solidStroke) {
+      style.border = `${node.strokeWeight}px solid ${getCSSRGBAColor(
+        solidStroke.color
+      )}`;
+    }
   }
 
   if (node.opacity != null) {
@@ -397,7 +438,7 @@ const getVectorStyle = (node: VectorNodeProps) => {
   return style;
 };
 
-const getFrameStyle = (node: FrameProps) => {
+const getFrameStyle = (node: FrameProps & BaseNode<any>) => {
   const style: any = {};
   Object.assign(style, getVectorStyle(node));
   if (node.clipsContent) {
@@ -418,16 +459,16 @@ const getPositionStyle = ({
   height: Math.round(height) + "px",
 });
 
-const getBackgroundStyle = (fills: Fill[]) => {
+const getBackgroundStyle = (node: Node, fills: Fill[]) => {
   if (fills.length) {
     return {
-      background: getFillStyleValue(fills),
+      background: getFillStyleValue(node, fills),
     };
   }
   return {};
 };
 
-const getFillStyleValue = (fills: Fill[]) =>
+const getFillStyleValue = (node: Node, fills: Fill[]) =>
   fills
     .reverse()
     .map((fill, index) => {
@@ -438,8 +479,17 @@ const getFillStyleValue = (fills: Fill[]) =>
         case FillType.GRADIENT_LINEAR: {
           return getCSSLinearGradient(fill);
         }
+        case FillType.GRADIENT_RADIAL: {
+          return getCSSRadialGradient(fill);
+        }
+        default: {
+          // TODO - all gradient fills should work
+          logNodeWarning(node, `Cannot translate ${fill.type} fill to CSS`);
+          return null;
+        }
       }
     })
+    .filter(Boolean)
     .join(", ");
 
 const getCSSRGBAColor = ({ r, g, b, a }: Color, last: boolean = true) => {
@@ -463,6 +513,25 @@ const STYLE_MAP = {
   fontWeight: "font-weight",
   fontSize: "font-size",
   letterSpacing: "letter-spacing",
+};
+
+const BLEND_MODE_MAP = {
+  NORMAL: "normal",
+  DARKEN: "darken",
+  MULTIPLY: "multiply",
+  COLOR_BURN: "color-burn",
+  LIGHTEN: "lighten",
+  SCREEN: "screen",
+  COLOR_DODGE: "color-dodge",
+  OVERLAY: "overlay",
+  SOFT_LIGHT: "soft-light",
+  HARD_LIGHT: "hard-light",
+  DIFFERENCE: "difference",
+  EXCLUSION: "exclusion",
+  HUE: "hue",
+  LUMINOSITY: "luminosity",
+  SATURATION: "saturation",
+  COLOR: "color",
 };
 
 const TEXT_DECORATION_MAP = {
@@ -558,23 +627,35 @@ const getCSSLinearGradient = ({
   gradientHandlePositions,
   gradientStops,
 }: LinearGradient) => {
-  const [start, end] = gradientHandlePositions;
-  const angle = calcAngle(start, end);
-  return `linear-gradient(${angle}deg, ${gradientStops
+  // TODO: https://github.com/crcn/figmark/issues/12
+  const radians = calcGradiantHandleRadians(gradientHandlePositions);
+  return `linear-gradient(${radians}rad, ${gradientStops
     .map((stop) => {
-      return `${getCSSRGBAColor(stop.color, false)} ${stop.position * 100}%`;
+      return `${getCSSRGBAColor(stop.color)} ${stop.position * 100}%`;
     })
     .join(", ")})`;
 };
 
-const calcAngle = (start: Vector, end: Vector) => {
-  const radians = Math.atan(calcGradent(start, end));
-  return parseInt(radToDeg(radians).toFixed(1));
+const getCSSRadialGradient = ({ gradientStops }: RadialGradient) => {
+  // TODO: https://github.com/crcn/figmark/issues/13
+  return `radial-gradient(${gradientStops
+    .map((stop) => {
+      return `${getCSSRGBAColor(stop.color)} ${stop.position * 100}%`;
+    })
+    .join(", ")})`;
+};
+
+const calcGradiantHandleRadians = ([first, second]: Vector[]) => {
+  const ydiff = second.y - first.y;
+  const xdiff = first.x - second.x;
+  const radians = Math.atan2(-xdiff, -ydiff);
+  console.log("RAD", radians);
+  return Number(radians.toFixed(3));
 };
 const calcGradent = (start: Vector, end: Vector) => {
   return ((end.y - start.y) / (end.x - start.x)) * -1;
 };
-const radToDeg = (radian: number) => (180 * radian) / Math.PI;
+const radToDeg = (radian: number) => radian * (180 / Math.PI);
 
 const rgbToHex = (r: number, g: number, b: number) => {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);

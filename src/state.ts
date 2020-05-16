@@ -76,6 +76,9 @@ export type ExportSettings = {
 export enum FillType {
   SOLID = "SOLID",
   GRADIENT_LINEAR = "GRADIENT_LINEAR",
+  GRADIENT_RADIAL = "GRADIENT_RADIAL",
+  GRADIENT_ANGULAR = "GRADIENT_ANGULAR",
+  DIAMOND_GRADIENT = "DIAMOND_GRADIENT",
 }
 
 type BaseFill<TType extends FillType> = {
@@ -98,7 +101,27 @@ export type LinearGradient = {
   gradientStops: GradientStop[];
 } & BaseFill<FillType.GRADIENT_LINEAR>;
 
-export type Fill = SolidFill | LinearGradient;
+export type RadialGradient = {
+  gradientHandlePositions: Vector[];
+  gradientStops: GradientStop[];
+} & BaseFill<FillType.GRADIENT_RADIAL>;
+
+export type AngularGradient = {
+  gradientHandlePositions: Vector[];
+  gradientStops: GradientStop[];
+} & BaseFill<FillType.GRADIENT_ANGULAR>;
+
+export type DiamondGradient = {
+  gradientHandlePositions: Vector[];
+  gradientStops: GradientStop[];
+} & BaseFill<FillType.DIAMOND_GRADIENT>;
+
+export type Fill =
+  | SolidFill
+  | LinearGradient
+  | RadialGradient
+  | AngularGradient
+  | DiamondGradient;
 
 export type VectorNodeProps = {
   locked: boolean;
@@ -118,7 +141,7 @@ export type VectorNodeProps = {
   isMask: boolean;
   fills: Fill[];
   fillGeometry: Path[];
-  strokes: Paint[];
+  strokes: Fill[];
   strokeWeight: number;
   strokeCap: string;
   strokeJoin: string;
