@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { CONFIG_FILE_NAME } from "./constants";
 const memoize = require("fast-memoize");
-import { snakeCase } from "lodash";
+import { camelCase } from "lodash";
 
 export type FileConfig = {
   key: string;
@@ -10,11 +10,20 @@ export type FileConfig = {
 };
 
 export type Config = {
+  fileNameFormat?: FileNameFormat;
   teamId?: string;
   personalAccessToken: string;
   dest: string;
   fileVersions?: Record<string, string>;
 };
+
+export enum FileNameFormat {
+  Preserve = "preserve",
+  CamelCase = "camel-case",
+  PascalCase = "pascal-case",
+  SnakeCase = "snake-case",
+  KebabCase = "kebab-case",
+}
 
 // based on https://www.figma.com/developers/api
 export enum NodeType {
@@ -244,13 +253,26 @@ export const hasChildren = (node: Node): node is Parent => {
   return (node as any).children?.length > 0;
 };
 
-export const getNodeExportFileName = (node: Node, settings: ExportSettings) =>
-  `node-${getUniqueNodeName(node)}@${
+export const getNodeExportFileName = (
+  node: Node,
+  document: Document,
+  settings: ExportSettings
+) =>
+  `node-${getUniqueNodeName(node, document)}@${
     settings.constraint.value
   }.${settings.constraint.type.toLowerCase()}`;
-export const getUniqueNodeName = (node: Node) =>
-  `${snakeCase(node.name)}_${cleanupNodeId(node.id)}`;
-export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "_");
+export const getUniqueNodeName = (node: Node, document: Document) => {
+  const nodesThatShareName = flattenNodes(document).filter(
+    (child) => child.name === node.name
+  );
+
+  const postfix =
+    nodesThatShareName.length > 1 ? nodesThatShareName.indexOf(node) + 1 : "";
+
+  return camelCase(node.name + postfix);
+};
+
+export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "");
 
 const flattenNodes2 = (node: Node, allNodes: Node[] = []) => {
   allNodes.push(node);

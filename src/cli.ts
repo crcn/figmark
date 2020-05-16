@@ -7,6 +7,7 @@ import * as path from "path";
 import * as fsa from "fs-extra";
 import * as https from "https";
 import * as ora from "ora";
+import { camelCase, kebabCase, snakeCase } from "lodash";
 import {
   Config,
   readConfigSync,
@@ -15,11 +16,12 @@ import {
   isExported,
   ExportSettings,
   getNodeExportFileName,
+  FileNameFormat,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
 import { ProjectFile, Version } from "figma-api/lib/api-types";
-import { logInfo } from "./utils";
+import { logInfo, pascalCase } from "./utils";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -57,6 +59,7 @@ export const init = async () => {
 
   const config: Config = {
     dest,
+    fileNameFormat: FileNameFormat.KebabCase,
     personalAccessToken,
     teamId: teamId,
     fileVersions,
@@ -114,6 +117,7 @@ export const sync = async ({ watch }: SyncOptions) => {
     dest,
     teamId,
     fileVersions,
+    fileNameFormat,
   }: Config = readConfigSync(process.cwd());
 
   const client = new Figma.Api({ personalAccessToken });
@@ -125,7 +129,7 @@ export const sync = async ({ watch }: SyncOptions) => {
       (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
     logInfo(`Loading project: ${file.name}@${fileVersion}`);
 
-    await downloadFile(client, file.key, fileVersion, dest);
+    await downloadFile(client, file.key, fileVersion, fileNameFormat, dest);
   }
 
   if (watch) {
@@ -140,11 +144,31 @@ const EXTENSIONS = {
   "image/svg+xml": ".svg",
   "image/jpeg": ".jpg",
 };
+const formatFileName = (name: string, fileNameFormat: FileNameFormat) => {
+  switch (fileNameFormat) {
+    case FileNameFormat.CamelCase: {
+      return camelCase(name);
+    }
+    case FileNameFormat.KebabCase: {
+      return kebabCase(name);
+    }
+    case FileNameFormat.PascalCase: {
+      return pascalCase(name);
+    }
+    case FileNameFormat.SnakeCase: {
+      return snakeCase(name);
+    }
+    default: {
+      return name;
+    }
+  }
+};
 
 const downloadFile = async (
   client: Figma.Api,
   fileKey: string,
   version: string,
+  fileNameFormat: FileNameFormat,
   dest: string
 ) => {
   const destPath = path.join(process.cwd(), dest);
@@ -154,17 +178,21 @@ const downloadFile = async (
   });
   // const res = await client.get
 
-  const filePath = path.join(destPath, `${file.name}${PC_FILE_EXTENSION}`);
+  const filePath = path.join(
+    destPath,
+    `${formatFileName(file.name, fileNameFormat)}${PC_FILE_EXTENSION}`
+  );
+  console.log("PATH", filePath);
 
   const pcContent = translateFigmaProjectToPaperclip(file);
 
-  // if (fs.existsSync(filePath)) {
-  //   const existingFileContent = fs.readFileSync(filePath, "utf8")
+  if (fs.existsSync(filePath)) {
+    const existingFileContent = fs.readFileSync(filePath, "utf8");
 
-  //   if (existingFileContent === pcContent) {
-  //     return;
-  //   }
-  // }
+    if (existingFileContent === pcContent) {
+      return;
+    }
+  }
 
   fs.writeFileSync(filePath, pcContent);
   await downloadImages(client, fileKey, destPath);

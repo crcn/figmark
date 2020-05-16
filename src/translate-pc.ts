@@ -10,7 +10,6 @@ import {
 import {
   Node,
   NodeType,
-  hasVectorProps,
   Text,
   flattenNodes,
   getUniqueNodeName,
@@ -49,7 +48,7 @@ export const translateFigmaProjectToPaperclip = (file) => {
   context = translateStyles(file.document, context);
 
   context = addBuffer(`\n<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
-  context = translateComponents(file.document, context);
+  context = translateComponents(file.document, file.document, context);
 
   context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
   context = translatePreviews(file.document, context);
@@ -59,20 +58,28 @@ export const translateFigmaProjectToPaperclip = (file) => {
   return context.buffer;
 };
 
-const translateComponents = (node: Node, context: TranslateContext) => {
-  context = translateComponent(node, context);
+const translateComponents = (
+  node: Node,
+  document: Document,
+  context: TranslateContext
+) => {
+  context = translateComponent(node, document, context);
 
   if (!hasChildren(node) || node.type === NodeType.Instance) {
     return context;
   }
 
   for (const child of node.children) {
-    context = translateComponents(child, context);
+    context = translateComponents(child, document, context);
   }
   return context;
 };
 
-const translateComponent = (node: Node, context: TranslateContext) => {
+const translateComponent = (
+  node: Node,
+  document: Document,
+  context: TranslateContext
+) => {
   if (
     node.type === NodeType.Document ||
     node.type === NodeType.Canvas ||
@@ -85,7 +92,8 @@ const translateComponent = (node: Node, context: TranslateContext) => {
   if (node.type === NodeType.Vector) {
     context = addBuffer(
       `<svg export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
-        node
+        node,
+        document
       )} {className?}">\n`,
       context
     );
@@ -98,7 +106,8 @@ const translateComponent = (node: Node, context: TranslateContext) => {
 
     context = addBuffer(
       `<${tagName} export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
-        node
+        node,
+        document
       )} {className?}">\n`,
       context
     );
@@ -162,7 +171,10 @@ const translatePreview = (
     context = startBlock(context);
     if (node.type === NodeType.Text) {
       if (inComponent) {
-        context = addBuffer(`{_${getUniqueNodeName(node)}_text}\n`, context);
+        context = addBuffer(
+          `{_${getUniqueNodeName(node, document)}_text}\n`,
+          context
+        );
       } else {
         context = addBuffer(
           `${translateTextCharacters(node.characters)}\n`,
@@ -207,13 +219,17 @@ const translateInstancePreview = (
     context
   );
   if (includeClasses) {
-    context = addBuffer(` className="${getNodeClassName(node)}"`, context);
+    context = addBuffer(
+      ` className="${getNodeClassName(node, document)}"`,
+      context
+    );
   }
   for (const textNode of getAllTextNodes(node)) {
     context = addBuffer(
-      ` ${getUniqueNodeName(textNode)}_text={<>${translateTextCharacters(
-        textNode.characters
-      )}</>}`,
+      ` ${getUniqueNodeName(
+        textNode,
+        document
+      )}_text={<>${translateTextCharacters(textNode.characters)}</>}`,
       context
     );
   }
@@ -232,6 +248,7 @@ const translateStyles = (document: Document, context: TranslateContext) => {
         document,
         node.type === NodeType.Instance ? node.componentId : null
       ),
+      document,
       context,
       false
     );
@@ -243,13 +260,15 @@ const translateStyles = (document: Document, context: TranslateContext) => {
 
 const translateClassNames = (
   info: ComputedNestedStyleInfo,
+  document: Document,
   context: TranslateContext,
   isNested: boolean,
   instanceOfId?: string
 ) => {
   if (info.node.type === NodeType.Canvas) {
     return info.children.reduce(
-      (context, childInfo) => translateClassNames(childInfo, context, false),
+      (context, childInfo) =>
+        translateClassNames(childInfo, document, context, false),
       context
     );
   }
@@ -258,7 +277,7 @@ const translateClassNames = (
     return context;
   }
 
-  const nodeSelector = `.${getNodeClassName(info.node)}`;
+  const nodeSelector = `.${getNodeClassName(info.node, document)}`;
 
   if (isNested) {
     context = addBuffer(`& > :global(${nodeSelector}) {\n`, context);
@@ -292,7 +311,7 @@ const translateClassNames = (
   context = addBuffer(`}\n`, context);
 
   context = info.children.reduce(
-    (context, child) => translateClassNames(child, context, true),
+    (context, child) => translateClassNames(child, document, context, true),
     context
   );
   context = endBlock(context);
@@ -304,8 +323,9 @@ const isLayoutDeclaration = (key: string) =>
   /position|left|top|width|height/.test(key);
 
 // TODO - need to use compoennt name
-const getNodeClassName = (node: Node) => {
-  return `_${getUniqueNodeName(node)}`;
+const getNodeClassName = (node: Node, document: Document) => {
+  const nodeName = getUniqueNodeName(node, document);
+  return (isNaN(Number(nodeName.charAt(0))) ? "" : "_") + nodeName;
 };
 
 // TODO - need to use compoennt name

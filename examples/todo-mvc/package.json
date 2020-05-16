@@ -4,12 +4,17 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:definitions": "paperclip ./src/**/*.pc --compiler=paperclip-compiler-react --definition --write"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "husky": "^4.2.5",
     "prettier": "^2.0.5"
+  },
+  "dependencies": {
+    "paperclip": "^11.0.67",
+    "paperclip-cli": "^11.0.67",
+    "paperclip-compiler-react": "^11.0.67"
   }
 }
