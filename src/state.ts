@@ -35,12 +35,19 @@ export type BaseNode<TType extends string> = {
   type: TType;
 };
 
-export type Color = {};
+export type Color = {
+  r: number;
+  g: number;
+  b: number;
+  a: number;
+};
+
 export type Paint = {
   blendMode: string;
   type: string;
   color: Color;
 };
+
 export type LayoutConstraint = {};
 export type EasingType = {};
 export type Rectangle = {
@@ -66,6 +73,33 @@ export type ExportSettings = {
   constraint: Constraint;
 };
 
+export enum FillType {
+  SOLID = "SOLID",
+  GRADIENT_LINEAR = "GRADIENT_LINEAR",
+}
+
+type BaseFill<TType extends FillType> = {
+  blendMode: string;
+  type: TType;
+};
+
+type SolidFill = {
+  blendMode: string;
+  color: Color;
+} & BaseFill<FillType.SOLID>;
+
+export type GradientStop = {
+  color: Color;
+  position: number;
+};
+
+export type LinearGradient = {
+  gradientHandlePositions: Vector[];
+  gradientStops: GradientStop[];
+} & BaseFill<FillType.GRADIENT_LINEAR>;
+
+export type Fill = SolidFill | LinearGradient;
+
 export type VectorNodeProps = {
   locked: boolean;
   blendMode: string;
@@ -82,7 +116,7 @@ export type VectorNodeProps = {
   size: Vector;
   relativeTransformTransform: Transform;
   isMask: boolean;
-  fills: Paint[];
+  fills: Fill[];
   fillGeometry: Path[];
   strokes: Paint[];
   strokeWeight: number;

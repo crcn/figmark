@@ -1,3 +1,4 @@
+// inspired by https://github.com/KarlRombauts/Figma-SCSS-Generator/blob/master/gradients.js
 import {
   createTranslateContext,
   TranslateContext,
@@ -11,11 +12,16 @@ import {
   hasVectorProps,
   flattenNodes,
   getUniqueNodeName,
+  LinearGradient,
+  Vector,
   hasChildren,
   Document,
   cleanupNodeId,
+  Rectangle,
   getNodeById,
   getAllTextNodes,
+  Color,
+  FillType,
 } from "./state";
 import { pascalCase } from "./utils";
 const memoize = require("fast-memoize");
@@ -310,19 +316,94 @@ const containsStyle = memoize(
   }
 );
 
-const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
+const getCSSStyle = (node, document: Document, instanceOfId?: string) => {
   const style: Record<string, string | number> = {};
+
+  if (node.absoluteBoundingBox) {
+    style.position = "absolute";
+    style.left = Math.round(node.absoluteBoundingBox.x) + "px";
+    style.top = Math.round(node.absoluteBoundingBox.x) + "px";
+    style.width = Math.round(node.absoluteBoundingBox.width) + "px";
+    style.height = Math.round(node.absoluteBoundingBox.height) + "px";
+  }
+
+  if (node.type === NodeType.Text) {
+    Object.assign(style, translateStyle(node.style));
+  }
+
   if (hasVectorProps(node)) {
     if (node.opacity != null) {
       style.opacity = node.opacity;
     }
-
-    for (const fill of node.fills) {
-      if (fill.type === "SOLID") {
-        const { r, g, b, a } = fill.color as any;
-        style.background = `rgba(${r * 255}, ${g * 255}, ${b * 255}, ${a})`;
-      }
+    if (node.fills.length) {
+      style.background = node.fills
+        .reverse()
+        .map((fill, index) => {
+          switch (fill.type) {
+            case FillType.SOLID: {
+              return getCSSRGBAColor(
+                fill.color,
+                index === node.fills.length - 1
+              );
+            }
+            case FillType.GRADIENT_LINEAR: {
+              return getCSSLinearGradient(fill);
+            }
+          }
+        })
+        .join(", ");
     }
   }
   return style;
 };
+
+const getCSSRGBAColor = ({ r, g, b, a }: Color, last: boolean) => {
+  // TODO - generate hash
+  const color = `rgba(${Math.round(r * 255)}, ${Math.round(
+    g * 255
+  )}, ${Math.round(b * 255)}, ${a})`;
+
+  return last ? color : `linear-gradient(0deg, ${color}, ${color})`;
+};
+
+const STYLE_MAP = {
+  fontFamily: "font-family",
+  fontWeight: "font-weight",
+  fontSize: "font-size",
+  letterSpacing: "letter-spacing",
+};
+
+const translateStyle = (style: Record<string, string>) => {
+  const newStyle = {};
+  for (const key in style) {
+    const newKey = STYLE_MAP[key];
+    const value = style[key];
+    if (!newKey) {
+      continue;
+    }
+    newStyle[newKey] = value;
+  }
+  return newStyle;
+};
+
+const getCSSLinearGradient = ({
+  gradientHandlePositions,
+  gradientStops,
+}: LinearGradient) => {
+  const [start, end] = gradientHandlePositions;
+  const angle = calcAngle(start, end);
+  return `linear-gradient(${angle}deg, ${gradientStops
+    .map((stop) => {
+      return `${getCSSRGBAColor(stop.color, false)} ${stop.position * 100}%`;
+    })
+    .join(", ")})`;
+};
+
+const calcAngle = (start: Vector, end: Vector) => {
+  const radians = Math.atan(calcGradent(start, end));
+  return parseInt(radToDeg(radians).toFixed(1));
+};
+const calcGradent = (start: Vector, end: Vector) => {
+  return ((end.y - start.y) / (end.x - start.x)) * -1;
+};
+const radToDeg = (radian: number) => (180 * radian) / Math.PI;

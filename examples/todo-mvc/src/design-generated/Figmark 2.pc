@@ -6,12 +6,25 @@
 <!-- STYLES -->
 
 <style>
-  :global(._frame_1_1_2) {
-    background: rgba(255, 255, 255, 1);
-    & > :global(._rectangle_1_1_3) {
-      background: rgba(196.00000351667404, 196.00000351667404, 196.00000351667404, 1);
-    }
+  :global(._rectangle_1_7_2) {
+    position: absolute;
+    left: 0px;
+    top: 0px;
+    width: 216px;
+    height: 139px;
+    background: linear-gradient(0deg, rgba(255, 255, 255, 1), rgba(255, 255, 255, 1)), rgba(12, 4, 112, 1);
+  }
 
+  :global(._text_8_0) {
+    position: absolute;
+    left: 106px;
+    top: 106px;
+    width: 28px;
+    height: 18px;
+    font-family: Hanuman;
+    fot-weight: 400;
+    font-size: 12;
+    letter-spacing: 0;
   }
 
 </style>
@@ -19,25 +32,20 @@
 
 <!-- COMPONENTS -->
 
-<div export component as="Frame1" className="_frame_1_1_2 {className?}">
+<div export component as="Rectangle1" className="_rectangle_1_7_2 {className?}">
   {children}
 </div>
 
-<div export component as="Rectangle1" className="_rectangle_1_1_3 {className?}">
-  {children}
-</div>
-
-<span export component as="TestFigmark2" className="_test_figmark_2_1_4 {className?}">
+<span export component as="Text" className="_text_8_0 {className?}">
   {children}
 </span>
 
 <!-- PREVIEWS -->
 
-<Frame1>
-  <Rectangle1>
-  </Rectangle1>
-  <TestFigmark2>
-    test figmark 2
-  </TestFigmark2>
-</Frame1>
+<Rectangle1>
+</Rectangle1>
+
+<Text>
+  TEXT
+</Text>
 
