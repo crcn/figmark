@@ -29,6 +29,10 @@ export enum FileNameFormat {
 export enum NodeType {
   Document = "DOCUMENT",
   Rectangle = "RECTANGLE",
+  Ellipse = "ELLIPSE",
+  Star = "STAR",
+  REGULAR_POLYGON = "REGULAR_POLYGON",
+  Line = "LINE",
   Canvas = "CANVAS",
   Group = "GROUP",
   Frame = "FRAME",
@@ -88,6 +92,7 @@ export enum FillType {
   GRADIENT_RADIAL = "GRADIENT_RADIAL",
   GRADIENT_ANGULAR = "GRADIENT_ANGULAR",
   DIAMOND_GRADIENT = "DIAMOND_GRADIENT",
+  IMAGE = "IMAGE",
 }
 
 type BaseFill<TType extends FillType> = {
@@ -100,6 +105,12 @@ export type SolidFill = {
   blendMode: string;
   color: Color;
 } & BaseFill<FillType.SOLID>;
+
+export type ImageFill = {
+  blendMode: string;
+  scaleMode: string;
+  imageRef: string;
+} & BaseFill<FillType.IMAGE>;
 
 export type GradientStop = {
   color: Color;
@@ -131,7 +142,8 @@ export type Fill =
   | LinearGradient
   | RadialGradient
   | AngularGradient
-  | DiamondGradient;
+  | DiamondGradient
+  | ImageFill;
 
 export type VectorNodeProps = {
   locked: boolean;
@@ -191,6 +203,13 @@ export type RectangleNode = {
 } & VectorNodeProps &
   BaseNode<NodeType.Rectangle>;
 
+export type EllipseNode = {} & VectorNodeProps & BaseNode<NodeType.Ellipse>;
+export type StarNode = {} & VectorNodeProps & BaseNode<NodeType.Star>;
+export type RegularPolygonNode = {} & VectorNodeProps &
+  BaseNode<NodeType.REGULAR_POLYGON>;
+
+export type LineNode = {} & VectorNodeProps & BaseNode<NodeType.Line>;
+
 export type FrameProps = {
   children: Node[];
   clipsContent: boolean;
@@ -215,6 +234,10 @@ export type Node =
   | Frame
   | VectorNode
   | RectangleNode
+  | RegularPolygonNode
+  | StarNode
+  | EllipseNode
+  | LineNode
   | Instance
   | Text
   | Component;
@@ -260,7 +283,7 @@ export const getNodeExportFileName = (
 ) =>
   `node-${getUniqueNodeName(node, document)}@${
     settings.constraint.value
-  }.${settings.constraint.type.toLowerCase()}`;
+  }.${settings.format.toLowerCase()}`;
 export const getUniqueNodeName = (node: Node, document: Document) => {
   const nodesThatShareName = flattenNodes(document).filter(
     (child) => child.name === node.name

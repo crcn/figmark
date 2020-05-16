@@ -30,6 +30,8 @@ import {
   VectorNodeProps,
   BaseNode,
   Effect,
+  ImageFill,
+  getNodeExportFileName,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -53,7 +55,6 @@ export const translateFigmaProjectToPaperclip = (file) => {
   context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
   context = translatePreviews(file.document, context);
   // console.log(JSON.stringify(file, null, 2));
-  console.log(context.buffer);
   // console.log(JSON.stringify(file, null, 2));
   return context.buffer;
 };
@@ -89,6 +90,23 @@ const translateComponent = (
   }
 
   const componentName = getNodeComponentName(node, document);
+
+  if (node.exportSettings && node.exportSettings.length) {
+    context = addBuffer(
+      `<img export component as="${componentName}" src="./${getNodeExportFileName(
+        node,
+        document,
+        node.exportSettings[0]
+      )}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
+        node,
+        document
+      )} {className?}">\n\n`,
+      context
+    );
+
+    return context;
+  }
+
   if (node.type === NodeType.Vector) {
     context = addBuffer(
       `<svg export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
@@ -380,8 +398,6 @@ const containsStyle = memoize(
 const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
   const style: Record<string, string | number> = {};
 
-  console.log(JSON.stringify(node, null, 2));
-
   if (node.type === NodeType.Text) {
     Object.assign(style, getPositionStyle(node));
     Object.assign(style, getTextStyle(node));
@@ -405,11 +421,21 @@ const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
   } else if (node.type === NodeType.Rectangle) {
     Object.assign(style, getPositionStyle(node));
     Object.assign(style, getVectorStyle(node));
+  } else if (
+    node.type === NodeType.Ellipse ||
+    node.type === NodeType.REGULAR_POLYGON ||
+    node.type === NodeType.Star ||
+    node.type === NodeType.Vector
+  ) {
+    Object.assign(style, getPositionStyle(node));
+    if (!node.exportSettings) {
+      logNodeWarning(node, `should be exported since it's a polygon`);
+    }
   } else if (node.type === NodeType.Frame) {
     Object.assign(style, getPositionStyle(node));
     Object.assign(style, getFrameStyle(node));
   } else {
-    logWarn(`Can't generate styles for ${node.type}`);
+    logNodeWarning(node, `Can't generate styles for ${node.type}`);
   }
 
   return style;
@@ -544,6 +570,9 @@ const getFillStyleValue = (node: Node, fills: Fill[]) =>
         }
         case FillType.GRADIENT_RADIAL: {
           return getCSSRadialGradient(fill);
+        }
+        case FillType.IMAGE: {
+          return getCSSImageBackground(fill);
         }
         default: {
           // TODO - all gradient fills should work
@@ -708,11 +737,16 @@ const getCSSRadialGradient = ({ gradientStops }: RadialGradient) => {
     .join(", ")})`;
 };
 
+const getCSSImageBackground = ({ imageRef }: ImageFill) => {
+  // TODO: https://github.com/crcn/figmark/issues/13
+  // TODO - need to get actual extension info.
+  return `url("./${imageRef}.png")`;
+};
+
 const calcGradiantHandleRadians = ([first, second]: Vector[]) => {
   const ydiff = second.y - first.y;
   const xdiff = first.x - second.x;
   const radians = Math.atan2(-xdiff, -ydiff);
-  console.log("RAD", radians);
   return Number(radians.toFixed(3));
 };
 const calcGradent = (start: Vector, end: Vector) => {

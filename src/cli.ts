@@ -274,7 +274,9 @@ const downloadNodeImages = async (
       await downloadImageRef(
         client,
         destPath,
-        getNodeExportFileName(nodes[nodeId], settings).split(".").shift(),
+        getNodeExportFileName(nodes[nodeId], document, settings)
+          .split(".")
+          .shift(),
         result.images[nodeId]
       );
     }
@@ -287,7 +289,7 @@ const downloadImageRef = (
   name: string,
   url: string
 ) => {
-  console.log(`Downloading ${url}`);
+  logInfo(`Downloading ${url}`);
   return new Promise((resolve) => {
     https.get(url, (response) => {
       const contentType = response.headers["content-type"];
