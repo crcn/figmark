@@ -56,7 +56,7 @@ export type Rectangle = {
   width: number;
   height: number;
 };
-export type Effect = {};
+export type Effect = any;
 export type Vector = { x: number; y: number };
 export type Transform = [number, number, number][];
 export type Path = {};
@@ -82,6 +82,7 @@ export enum FillType {
 }
 
 type BaseFill<TType extends FillType> = {
+  visible?: boolean;
   blendMode: string;
   type: TType;
 };

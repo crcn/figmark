@@ -30,6 +30,7 @@ import {
   SolidFill,
   VectorNodeProps,
   BaseNode,
+  Effect,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -394,17 +395,20 @@ const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
 const getVectorStyle = (node: VectorNodeProps & BaseNode<any>) => {
   const style: any = {};
   if (node.fills.length) {
-    style.background = getFillStyleValue(node, node.fills);
-    const containsBlendModes = node.fills.some((fill) => {
-      return fill.blendMode !== "NORMAL";
-    });
+    const value = getFillStyleValue(node, node.fills);
+    if (value) {
+      style.background = value;
+      const containsBlendModes = node.fills.some((fill) => {
+        return fill.blendMode !== "NORMAL";
+      });
 
-    if (containsBlendModes) {
-      style["background-blend-mode"] = node.fills
-        .map((fill) => {
-          return BLEND_MODE_MAP[fill.blendMode];
-        })
-        .join(", ");
+      if (containsBlendModes) {
+        style["background-blend-mode"] = node.fills
+          .map((fill) => {
+            return BLEND_MODE_MAP[fill.blendMode];
+          })
+          .join(", ");
+      }
     }
   }
   if (node.blendMode && BLEND_MODE_MAP[node.blendMode]) {
@@ -431,11 +435,55 @@ const getVectorStyle = (node: VectorNodeProps & BaseNode<any>) => {
     }
   }
 
+  if (node.effects.length) {
+    Object.assign(style, getEffectsStyle(node, node.effects));
+  }
+
   if (node.opacity != null) {
     style.opacity = node.opacity;
   }
 
   return style;
+};
+
+const getEffectsStyle = (node: Node, effects: Effect[]) => {
+  const newStyle = {};
+  const visibleEffects = effects.filter((effect) => effect.visible !== false);
+  const dropShadows = visibleEffects.filter(
+    (effect) => effect.type === "DROP_SHADOW" || effect.type === "INNER_SHADOW"
+  );
+
+  if (dropShadows.length) {
+    newStyle["box-shadow"] = dropShadows
+      .map(({ type, offset, radius, color }) => {
+        return `${type === "INNER_SHADOW" ? "inset" : ""} ${offset.x}px ${
+          offset.y
+        }px ${radius}px ${getCSSRGBAColor(color)}`;
+      })
+      .join(", ");
+  }
+
+  const layerBlur = visibleEffects.find(
+    (effect) => effect.type === "LAYER_BLUR"
+  );
+
+  if (layerBlur) {
+    newStyle["filter"] = `blur(${layerBlur.radius}px)`;
+  }
+
+  const backgroundBlur = visibleEffects.find(
+    (effect) => effect.type === "BACKGROUND_BLUR"
+  );
+
+  if (layerBlur) {
+    logNodeWarning(
+      node,
+      `Contains background blur which has minimal CSS support`
+    );
+    newStyle["backdrop-filter"] = `blur(${backgroundBlur.radius}px)`;
+  }
+
+  return newStyle;
 };
 
 const getFrameStyle = (node: FrameProps & BaseNode<any>) => {
@@ -459,18 +507,10 @@ const getPositionStyle = ({
   height: Math.round(height) + "px",
 });
 
-const getBackgroundStyle = (node: Node, fills: Fill[]) => {
-  if (fills.length) {
-    return {
-      background: getFillStyleValue(node, fills),
-    };
-  }
-  return {};
-};
-
 const getFillStyleValue = (node: Node, fills: Fill[]) =>
   fills
     .reverse()
+    .filter((fill) => fill.visible !== false)
     .map((fill, index) => {
       switch (fill.type) {
         case FillType.SOLID: {
