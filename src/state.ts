@@ -246,7 +246,8 @@ export const hasVectorProps = (node: Node): node is VectorLikeNode => {
   return (
     node.type === NodeType.Frame ||
     node.type == NodeType.Rectangle ||
-    node.type == NodeType.Vector
+    node.type == NodeType.Vector ||
+    node.type == NodeType.Instance
   );
 };
 
@@ -293,6 +294,34 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
     nodesThatShareName.length > 1 ? nodesThatShareName.indexOf(node) + 1 : "";
 
   return camelCase(node.name + postfix);
+};
+
+export const getNodePath = (node: Node, root: Node) => {
+  return findNodePath(node, root);
+};
+
+export const getNodeByPath = (path: number[], root: any) => {
+  let curr = root;
+  for (const part of path) {
+    curr = curr.children[part];
+  }
+  return curr;
+};
+
+const findNodePath = (node: Node, current: any, path: number[] = []) => {
+  if (current === node) {
+    return path;
+  }
+  if (current.children) {
+    for (let i = 0, { length } = current.children; i < length; i++) {
+      const child = current.children[i];
+      const foundPath = findNodePath(node, child, [...path, i]);
+      if (foundPath) {
+        return foundPath;
+      }
+    }
+  }
+  return null;
 };
 
 export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "");

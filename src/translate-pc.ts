@@ -32,6 +32,11 @@ import {
   Effect,
   ImageFill,
   getNodeExportFileName,
+  Component,
+  getNodePath,
+  getNodeByPath,
+  Instance,
+  hasVectorProps,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -54,8 +59,6 @@ export const translateFigmaProjectToPaperclip = (file) => {
 
   context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
   context = translatePreviews(file.document, context);
-  // console.log(JSON.stringify(file, null, 2));
-  // console.log(JSON.stringify(file, null, 2));
   return context.buffer;
 };
 
@@ -136,11 +139,24 @@ const translateComponent = (
   }
   return context;
 };
+
+const getAllComponents = (document: Document) => {
+  return flattenNodes(document).filter(
+    (node) => node.type === NodeType.Component
+  ) as Component[];
+};
+
 const translatePreviews = (document: Document, context: TranslateContext) => {
   const canvas = document.children[0];
 
   if (!hasChildren(canvas)) {
     return;
+  }
+
+  const allComponents = getAllComponents(document);
+
+  for (const component of allComponents) {
+    context = translateComponentPreview(component, document, context);
   }
 
   for (const child of canvas.children) {
@@ -154,8 +170,31 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
 };
 
 const getPreviewComponentName = (nodeId: string, document: Document) =>
-  "_" +
+  "_Preview_" +
   pascalCase(getNodeById(nodeId, document).name + "_" + cleanupNodeId(nodeId));
+
+const translateComponentPreview = (
+  node: Component,
+  document: Document,
+  context: TranslateContext
+) => {
+  context = addBuffer(
+    `<${getNodeComponentName(
+      node,
+      document
+    )} component as="${getPreviewComponentName(
+      node.id,
+      document
+    )}" withAbsoluteLayout {className}`,
+    context
+  );
+
+  context = addBuffer(`>\n`, context);
+  context = translatePreviewChildren(node, document, context, true);
+  context = addBuffer(`</${getNodeComponentName(node, document)}>\n`, context);
+
+  return context;
+};
 
 const translatePreview = (
   node: Node,
@@ -163,11 +202,11 @@ const translatePreview = (
   context: TranslateContext,
   inComponent?: boolean
 ) => {
-  if (node.type === NodeType.Instance) {
+  if (node.type === NodeType.Instance || node.type === NodeType.Component) {
     context = translateInstancePreview(
       node,
       document,
-      node.componentId,
+      node.type === NodeType.Instance ? node.componentId : node.id,
       context
     );
   } else {
@@ -175,52 +214,42 @@ const translatePreview = (
       `<${getNodeComponentName(node, document)} withAbsoluteLayout`,
       context
     );
-    const isComponent = node.type === NodeType.Component;
-
-    if (isComponent) {
-      context = addBuffer(
-        ` component as="${getPreviewComponentName(node.id, document)}"`,
-        context
-      );
-      inComponent = true;
-    }
 
     context = addBuffer(`>\n`, context);
-    context = startBlock(context);
-    if (node.type === NodeType.Text) {
-      if (inComponent) {
-        context = addBuffer(
-          `{_${getUniqueNodeName(node, document)}_text}\n`,
-          context
-        );
-      } else {
-        context = addBuffer(
-          `${translateTextCharacters(node.characters)}\n`,
-          context
-        );
-      }
-    } else if (hasChildren(node)) {
-      for (const child of node.children) {
-        context = translatePreview(child, document, context, inComponent);
-      }
-    }
-    context = endBlock(context);
+    context = translatePreviewChildren(node, document, context, inComponent);
     context = addBuffer(
       `</${getNodeComponentName(node, document)}>\n`,
       context
     );
+  }
+  return context;
+};
 
-    if (isComponent) {
-      context = addBuffer(`\n`, context);
-      context = translateInstancePreview(
-        node,
-        document,
-        node.id,
-        context,
-        false
+const translatePreviewChildren = (
+  node: Node,
+  document: Document,
+  context: TranslateContext,
+  inComponent?: boolean
+) => {
+  context = startBlock(context);
+  if (node.type === NodeType.Text) {
+    if (inComponent) {
+      context = addBuffer(
+        `{${getUniqueNodeName(node, document)}_text}\n`,
+        context
+      );
+    } else {
+      context = addBuffer(
+        `${translateTextCharacters(node.characters)}\n`,
+        context
       );
     }
+  } else if (hasChildren(node)) {
+    for (const child of node.children) {
+      context = translatePreview(child, document, context, inComponent);
+    }
   }
+  context = endBlock(context);
   return context;
 };
 
@@ -228,8 +257,19 @@ const translateTextCharacters = (characters: string) => {
   return characters.replace(/[\n\r]+/g, " <br /> ");
 };
 
+const getComponentNestedNode = (
+  nestedInstanceNode: Node,
+  instance: Node,
+  componentId: string,
+  document: Document
+) => {
+  const component = getNodeById(componentId, document);
+  const nodePath = getNodePath(nestedInstanceNode, instance);
+  return getNodeByPath(nodePath, component);
+};
+
 const translateInstancePreview = (
-  node: Node,
+  instance: Node,
   document: Document,
   componentId: string,
   context: TranslateContext,
@@ -241,16 +281,24 @@ const translateInstancePreview = (
   );
   if (includeClasses) {
     context = addBuffer(
-      ` className="${getNodeClassName(node, document)}"`,
+      ` className="${getNodeClassName(instance, document)}"`,
       context
     );
   }
-  for (const textNode of getAllTextNodes(node)) {
+  for (const textNode of getAllTextNodes(instance)) {
+    const componentTextNode = getComponentNestedNode(
+      textNode,
+      instance,
+      componentId,
+      document
+    );
     context = addBuffer(
       ` ${getUniqueNodeName(
-        textNode,
+        componentTextNode,
         document
-      )}_text={<>${translateTextCharacters(textNode.characters)}</>}`,
+      )}_text={<fragment>${translateTextCharacters(
+        textNode.characters
+      )}</fragment>}`,
       context
     );
   }
@@ -262,20 +310,33 @@ const translateStyles = (document: Document, context: TranslateContext) => {
   const allNodes: Node[] = flattenNodes(document);
   context = addBuffer(`<style>\n`, context);
   context = startBlock(context);
-  for (const node of document.children) {
+  const allComponents = getAllComponents(document);
+  context = translateNodeClassNames(allComponents, document, context, false);
+  context = translateNodeClassNames(document.children, document, context, true);
+  context = endBlock(context);
+  context = addBuffer(`</style>\n\n`, context);
+  return context;
+};
+
+const translateNodeClassNames = (
+  nodes: Node[],
+  document: Document,
+  context: TranslateContext,
+  skipComponents?: boolean
+) => {
+  for (const node of nodes) {
     context = translateClassNames(
       getNestedCSSStyles(
         node,
         document,
-        node.type === NodeType.Instance ? node.componentId : null
+        node.type === NodeType.Instance ? node : null
       ),
       document,
       context,
-      false
+      false,
+      skipComponents
     );
   }
-  context = endBlock(context);
-  context = addBuffer(`</style>\n\n`, context);
   return context;
 };
 
@@ -284,12 +345,19 @@ const translateClassNames = (
   document: Document,
   context: TranslateContext,
   isNested: boolean,
-  instanceOfId?: string
+  skipComponents: boolean,
+  instance?: Instance
 ) => {
   if (info.node.type === NodeType.Canvas) {
     return info.children.reduce(
       (context, childInfo) =>
-        translateClassNames(childInfo, document, context, false),
+        translateClassNames(
+          childInfo,
+          document,
+          context,
+          false,
+          skipComponents
+        ),
       context
     );
   }
@@ -298,7 +366,17 @@ const translateClassNames = (
     return context;
   }
 
-  const nodeSelector = `.${getNodeClassName(info.node, document)}`;
+  const targetNode =
+    info.node.type === NodeType.Instance || !instance
+      ? info.node
+      : getComponentNestedNode(
+          info.node,
+          instance,
+          instance.componentId,
+          document
+        );
+
+  const nodeSelector = `.${getNodeClassName(targetNode, document)}`;
 
   if (isNested) {
     context = addBuffer(`& > :global(${nodeSelector}) {\n`, context);
@@ -312,29 +390,41 @@ const translateClassNames = (
   // component props
 
   // TODO - get CSS props ins
+  let hasLayoutDeclaration = false;
   for (const key in info.style) {
     if (isLayoutDeclaration(key)) {
+      hasLayoutDeclaration = true;
       continue;
     }
     context = addBuffer(`${key}: ${info.style[key]};\n`, context);
   }
 
   // ABS layout should be opt-in since it's non-responsive.
-  context = addBuffer(`&[data-with-absolute-layout] {\n`, context);
-  context = startBlock(context);
-  for (const key in info.style) {
-    if (isLayoutDeclaration(key)) {
-      context = addBuffer(`${key}: ${info.style[key]};\n`, context);
+  if (hasLayoutDeclaration) {
+    context = addBuffer(`&[data-with-absolute-layout] {\n`, context);
+    context = startBlock(context);
+    for (const key in info.style) {
+      if (isLayoutDeclaration(key)) {
+        context = addBuffer(`${key}: ${info.style[key]};\n`, context);
+      }
     }
+    context = endBlock(context);
+    context = addBuffer(`}\n`, context);
   }
 
-  context = endBlock(context);
-  context = addBuffer(`}\n`, context);
-
-  context = info.children.reduce(
-    (context, child) => translateClassNames(child, document, context, true),
-    context
-  );
+  context = info.children.reduce((context, child) => {
+    if (child.node.type === NodeType.Component && skipComponents) {
+      return context;
+    }
+    return translateClassNames(
+      child,
+      document,
+      context,
+      true,
+      skipComponents,
+      info.node.type == NodeType.Instance ? info.node : null
+    );
+  }, context);
   context = endBlock(context);
   context = addBuffer(`}\n\n`, context);
   return context;
@@ -346,7 +436,7 @@ const isLayoutDeclaration = (key: string) =>
 // TODO - need to use compoennt name
 const getNodeClassName = (node: Node, document: Document) => {
   const nodeName = getUniqueNodeName(node, document);
-  return (isNaN(Number(nodeName.charAt(0))) ? "" : "_") + nodeName;
+  return nodeName;
 };
 
 // TODO - need to use compoennt name
@@ -360,21 +450,43 @@ export type ComputedNestedStyleInfo = {
   children: ComputedNestedStyleInfo[];
 };
 
-const getNestedCSSStyles = (
-  node: Node,
-  document: Document,
-  instanceOfId?: string
-): ComputedNestedStyleInfo => {
-  const nodeStyle = getCSSStyle(node, document, instanceOfId);
-  return {
-    node,
-    style: nodeStyle,
-    children: hasChildren(node)
-      ? node.children.map((child) => {
-          return getNestedCSSStyles(child, document, instanceOfId);
-        })
-      : [],
-  };
+const getNestedCSSStyles = memoize(
+  (
+    node: Node,
+    document: Document,
+    instance?: Instance
+  ): ComputedNestedStyleInfo => {
+    const nodeStyle = getCSSStyle(node, document, instance);
+    return {
+      node,
+      style: nodeStyle,
+      children: hasChildren(node)
+        ? node.children.map((child) => {
+            return getNestedCSSStyles(
+              child,
+              document,
+              node.type == NodeType.Instance ? node : instance
+            );
+          })
+        : [],
+    };
+  }
+);
+
+const getStyleOverrides = (style: any, overrides: any): any => {
+  const newStyle = {};
+  for (const key in style) {
+    if (!overrides[key]) {
+      newStyle[key] = "unset";
+    }
+  }
+
+  for (const key in overrides) {
+    if (overrides[key] !== style[key]) {
+      newStyle[key] = overrides[key];
+    }
+  }
+  return newStyle;
 };
 
 const containsStyle = memoize(
@@ -395,54 +507,70 @@ const containsStyle = memoize(
   }
 );
 
-const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
-  const style: Record<string, string | number> = {};
+const getCSSStyle = memoize(
+  (node: Node, document: Document, instance?: Instance) => {
+    let style: Record<string, string | number> = {};
 
-  if (node.type === NodeType.Text) {
-    Object.assign(style, getPositionStyle(node));
-    Object.assign(style, getTextStyle(node));
-
-    const containsNonSolifFill = node.fills.some(
-      (fill) => fill.type !== FillType.SOLID
-    );
-
-    if (containsNonSolifFill) {
-      logNodeWarning(node, `cannot translate non-solid text color to CSS`);
+    if (hasVectorProps(node)) {
+      Object.assign(style, getVectorStyle(node));
     }
 
-    // text color must be solid, so search for one
-    const solidFill = node.fills.find(
-      (fill) => fill.type === FillType.SOLID
-    ) as SolidFill;
-    if (solidFill) {
-      style.color = getCSSRGBAColor(solidFill.color);
+    if (node.type === NodeType.Text) {
+      Object.assign(style, getPositionStyle(node));
+      Object.assign(style, getTextStyle(node));
+
+      const containsNonSolifFill = node.fills.some(
+        (fill) => fill.type !== FillType.SOLID
+      );
+
+      if (containsNonSolifFill) {
+        logNodeWarning(node, `cannot translate non-solid text color to CSS`);
+      }
+
+      // text color must be solid, so search for one
+      const solidFill = node.fills.find(
+        (fill) => fill.type === FillType.SOLID
+      ) as SolidFill;
+      if (solidFill) {
+        style.color = getCSSRGBAColor(solidFill.color);
+      }
+    } else if (
+      node.type === NodeType.Ellipse ||
+      node.type === NodeType.REGULAR_POLYGON ||
+      node.type === NodeType.Star ||
+      node.type === NodeType.Vector
+    ) {
+      Object.assign(style, getPositionStyle(node));
+      if (!node.exportSettings) {
+        logNodeWarning(node, `should be exported since it's a polygon`);
+      }
+    } else if (node.type === NodeType.Frame) {
+      Object.assign(style, getPositionStyle(node));
+      Object.assign(style, getFrameStyle(node));
+    } else {
+      logNodeWarning(node, `Can't generate styles for ${node.type}`);
     }
-  } else if (node.type === NodeType.Group) {
-  } else if (node.type === NodeType.Rectangle) {
-    Object.assign(style, getPositionStyle(node));
-    Object.assign(style, getVectorStyle(node));
-  } else if (
-    node.type === NodeType.Ellipse ||
-    node.type === NodeType.REGULAR_POLYGON ||
-    node.type === NodeType.Star ||
-    node.type === NodeType.Vector
-  ) {
-    Object.assign(style, getPositionStyle(node));
-    if (!node.exportSettings) {
-      logNodeWarning(node, `should be exported since it's a polygon`);
+
+    if (instance && node.type !== NodeType.Instance) {
+      const targetNode = getComponentNestedNode(
+        node,
+        instance,
+        instance.componentId,
+        document
+      );
+      const targetNodeStyle = getCSSStyle(targetNode, document);
+      style = getStyleOverrides(targetNodeStyle, style);
     }
-  } else if (node.type === NodeType.Frame) {
-    Object.assign(style, getPositionStyle(node));
-    Object.assign(style, getFrameStyle(node));
-  } else {
-    logNodeWarning(node, `Can't generate styles for ${node.type}`);
+
+    return style;
   }
-
-  return style;
-};
+);
 
 const getVectorStyle = (node: VectorNodeProps & BaseNode<any>) => {
   const style: any = {};
+  if (node.absoluteBoundingBox) {
+    Object.assign(style, getPositionStyle(node));
+  }
   if (node.fills.length) {
     const value = getFillStyleValue(node, node.fills);
     if (value) {

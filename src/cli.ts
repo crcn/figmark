@@ -21,7 +21,7 @@ import {
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
 import { ProjectFile, Version } from "figma-api/lib/api-types";
-import { logInfo, pascalCase } from "./utils";
+import { logInfo, pascalCase, logWarn } from "./utils";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -182,7 +182,6 @@ const downloadFile = async (
     destPath,
     `${formatFileName(file.name, fileNameFormat)}${PC_FILE_EXTENSION}`
   );
-  console.log("PATH", filePath);
 
   const pcContent = translateFigmaProjectToPaperclip(file);
 
@@ -209,6 +208,7 @@ const downloadImages = async (
   fileKey: string,
   destPath: string
 ) => {
+  logInfo(`Downloading images`);
   const result = await client.getImageFills(fileKey);
 
   for (const refId in result.meta.images) {
@@ -314,5 +314,5 @@ const downloadImageRef = (
 };
 
 const logWarning = (text: string) => {
-  console.warn(`⚠️  ${text}`);
+  logWarn(text);
 };
