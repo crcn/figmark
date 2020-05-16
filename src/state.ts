@@ -83,7 +83,7 @@ type BaseFill<TType extends FillType> = {
   type: TType;
 };
 
-type SolidFill = {
+export type SolidFill = {
   blendMode: string;
   color: Color;
 } & BaseFill<FillType.SOLID>;
@@ -141,7 +141,7 @@ export type Canvas = {
 
 export type Text = {
   characters: string;
-  style: Object;
+  style: Record<string, string | number>;
 } & VectorNodeProps &
   BaseNode<NodeType.Text>;
 
@@ -158,8 +158,9 @@ export type RectangleNode = {
 } & VectorNodeProps &
   BaseNode<NodeType.Rectangle>;
 
-type FrameProps = {
+export type FrameProps = {
   children: Node[];
+  clipsContent: boolean;
 } & VectorNodeProps;
 
 export type Frame = FrameProps & BaseNode<NodeType.Frame>;

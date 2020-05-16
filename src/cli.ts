@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as fsa from "fs-extra";
 import * as https from "https";
+import * as ora from "ora";
 import {
   Config,
   readConfigSync,
@@ -18,6 +19,7 @@ import {
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
 import { ProjectFile, Version } from "figma-api/lib/api-types";
+import { logInfo } from "./utils";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -105,7 +107,7 @@ export const sync = async ({ watch }: SyncOptions) => {
     );
   }
 
-  console.log("Syncing with Figma...");
+  logInfo(`Loading team designs from Figma`);
 
   const {
     personalAccessToken,
@@ -116,10 +118,13 @@ export const sync = async ({ watch }: SyncOptions) => {
 
   const client = new Figma.Api({ personalAccessToken });
   const files = await getTeamFiles(client, teamId);
+
+  // spinner.stop();
   for (const file of files) {
     const fileVersion =
       (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
-    console.log(`Downloading project: ${file.name}@${fileVersion}`);
+    logInfo(`Loading project: ${file.name}@${fileVersion}`);
+
     await downloadFile(client, file.key, fileVersion, dest);
   }
 

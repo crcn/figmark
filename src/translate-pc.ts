@@ -16,14 +16,19 @@ import {
   Vector,
   hasChildren,
   Document,
+  FrameProps,
   cleanupNodeId,
   Rectangle,
   getNodeById,
   getAllTextNodes,
   Color,
   FillType,
+  Fill,
+  SolidFill,
+  VectorNodeProps,
 } from "./state";
-import { pascalCase } from "./utils";
+import { pascalCase, logWarn } from "./utils";
+import * as chalk from "chalk";
 const memoize = require("fast-memoize");
 
 export const translateFigmaProjectToPaperclip = (file) => {
@@ -316,52 +321,110 @@ const containsStyle = memoize(
   }
 );
 
-const getCSSStyle = (node, document: Document, instanceOfId?: string) => {
+const getCSSStyle = (node: Node, document: Document, instanceOfId?: string) => {
   const style: Record<string, string | number> = {};
 
-  if (node.absoluteBoundingBox) {
-    style.position = "absolute";
-    style.left = Math.round(node.absoluteBoundingBox.x) + "px";
-    style.top = Math.round(node.absoluteBoundingBox.x) + "px";
-    style.width = Math.round(node.absoluteBoundingBox.width) + "px";
-    style.height = Math.round(node.absoluteBoundingBox.height) + "px";
-  }
-
   if (node.type === NodeType.Text) {
-    Object.assign(style, translateStyle(node.style));
+    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, translateTextStyle(node.style));
+
+    const containsNonSolifFill = node.fills.some(
+      (fill) => fill.type !== FillType.SOLID
+    );
+
+    if (containsNonSolifFill) {
+      logNodeWarning(node, `cannot translate non-solid text color to CSS`);
+    }
+
+    // text color must be solid, so search for one
+    const solidFill = node.fills.find(
+      (fill) => fill.type === FillType.SOLID
+    ) as SolidFill;
+    if (solidFill) {
+      style.color = getCSSRGBAColor(solidFill.color);
+    }
+  } else if (node.type === NodeType.Group) {
+  } else if (node.type === NodeType.Rectangle) {
+  } else if (node.type === NodeType.Frame) {
+    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getFrameStyle(node));
+  } else {
+    logWarn(`Can't generate styles for ${node.type}`);
   }
 
-  if (hasVectorProps(node)) {
-    if (node.opacity != null) {
-      style.opacity = node.opacity;
-    }
-    if (node.fills.length) {
-      style.background = node.fills
-        .reverse()
-        .map((fill, index) => {
-          switch (fill.type) {
-            case FillType.SOLID: {
-              return getCSSRGBAColor(
-                fill.color,
-                index === node.fills.length - 1
-              );
-            }
-            case FillType.GRADIENT_LINEAR: {
-              return getCSSLinearGradient(fill);
-            }
-          }
-        })
-        .join(", ");
-    }
+  return style;
+};
+
+const getVectorStyle = (node: VectorNodeProps) => {
+  const style: any = {};
+  if (node.fills.length) {
+    style.background = getFillStyleValue(node.fills);
+  }
+
+  if (node.opacity != null) {
+    style.opacity = node.opacity;
+  }
+
+  return style;
+};
+
+const getFrameStyle = (node: FrameProps) => {
+  const style: any = {};
+  Object.assign(style, getVectorStyle(node));
+  if (node.clipsContent) {
+    style.overflow = "hidden";
   }
   return style;
 };
 
-const getCSSRGBAColor = ({ r, g, b, a }: Color, last: boolean) => {
+const getPositionStyle = ({
+  absoluteBoundingBox: { x, y, width, height },
+}: {
+  absoluteBoundingBox: Rectangle;
+}) => ({
+  position: "absolute",
+  left: Math.round(x) + "px",
+  top: Math.round(y) + "px",
+  width: Math.round(width) + "px",
+  height: Math.round(height) + "px",
+});
+
+const getBackgroundStyle = (fills: Fill[]) => {
+  if (fills.length) {
+    return {
+      background: getFillStyleValue(fills),
+    };
+  }
+  return {};
+};
+
+const getFillStyleValue = (fills: Fill[]) =>
+  fills
+    .reverse()
+    .map((fill, index) => {
+      switch (fill.type) {
+        case FillType.SOLID: {
+          return getCSSRGBAColor(fill.color, index === fills.length - 1);
+        }
+        case FillType.GRADIENT_LINEAR: {
+          return getCSSLinearGradient(fill);
+        }
+      }
+    })
+    .join(", ");
+
+const getCSSRGBAColor = ({ r, g, b, a }: Color, last: boolean = true) => {
+  const r2 = Math.round(r * 255);
+  const g2 = Math.round(g * 255);
+  const b2 = Math.round(b * 255);
+
   // TODO - generate hash
-  const color = `rgba(${Math.round(r * 255)}, ${Math.round(
-    g * 255
-  )}, ${Math.round(b * 255)}, ${a})`;
+  let color;
+  if (a !== 1) {
+    color = `rgba(${r2}, ${g2}, ${b2}, ${a})`;
+  } else {
+    color = rgbToHex(r2, g2, b2);
+  }
 
   return last ? color : `linear-gradient(0deg, ${color}, ${color})`;
 };
@@ -373,16 +436,22 @@ const STYLE_MAP = {
   letterSpacing: "letter-spacing",
 };
 
-const translateStyle = (style: Record<string, string>) => {
+const translateTextStyle = (style: Record<string, string | number>) => {
   const newStyle = {};
-  for (const key in style) {
-    const newKey = STYLE_MAP[key];
-    const value = style[key];
-    if (!newKey) {
-      continue;
-    }
-    newStyle[newKey] = value;
+
+  if (style.fontFamily) {
+    newStyle["font-family"] = style.fontFamily;
   }
+  if (style.fontWeight) {
+    newStyle["font-weight"] = style.fontWeight;
+  }
+  if (style.fontSize) {
+    newStyle["font-size"] = style.fontSize + "px";
+  }
+  if (style.letterSpacing) {
+    newStyle["letter-spacing"] = style.letterSpacing;
+  }
+
   return newStyle;
 };
 
@@ -407,3 +476,10 @@ const calcGradent = (start: Vector, end: Vector) => {
   return ((end.y - start.y) / (end.x - start.x)) * -1;
 };
 const radToDeg = (radian: number) => (180 * radian) / Math.PI;
+
+const rgbToHex = (r: number, g: number, b: number) => {
+  return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+};
+const logNodeWarning = (node: Node, message: string) => {
+  logWarn(`Layer ${chalk.bold(node.name)}: ${message}`);
+};
