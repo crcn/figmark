@@ -4,8 +4,8 @@
   "teamId": "842804427190189344",
   "fileNameFormat": "kebab-case",
   "compilerOptions": {
-    "includeAbsoluteLayout": true,
-    "includePreviews": true
+    "includeAbsoluteLayout": false,
+    "includePreviews": false
   },
   "fileVersions": {}
 }

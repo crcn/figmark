@@ -43,8 +43,7 @@ import {
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
-// const memoize = require("fast-memoize");
-const memoize = (fn) => fn;
+import { camelCase } from "lodash";
 
 export const translateFigmaProjectToPaperclip = (
   file,
@@ -100,7 +99,6 @@ const translateComponent = (
   ) {
     return context;
   }
-
 
   const componentName = getNodeComponentName(node, document);
   const withAbsoluteLayoutAttr =
@@ -361,8 +359,7 @@ const translateNodeClassNames = (
       context,
       false,
       skipComponents,
-      null,
-      true
+      null
     );
   }
   return context;
@@ -374,8 +371,7 @@ const translateClassNames = (
   context: TranslateContext,
   isNested: boolean,
   skipComponents: boolean,
-  instance?: Instance,
-  isRoot?: boolean
+  instance?: Instance
 ) => {
   if (info.node.type === NodeType.Canvas) {
     return info.children.reduce(
@@ -386,14 +382,13 @@ const translateClassNames = (
           context,
           false,
           skipComponents,
-          null,
-          isRoot
+          null
         ),
       context
     );
   }
 
-  if (!containsStyle(info)) {
+  if (!containsStyle(info, document)) {
     return context;
   }
 
@@ -466,7 +461,7 @@ const translateClassNames = (
   }, context);
   context = endBlock(context);
   context = addBuffer(`}\n`, context);
-  if (isRoot) {
+  if (!isNested) {
     context = addBuffer(`\n`, context);
   }
   return context;
@@ -478,7 +473,11 @@ const isLayoutDeclaration = (key: string) =>
 // TODO - need to use compoennt name
 const getNodeClassName = (node: Node, document: Document) => {
   const nodeName = getUniqueNodeName(node, document);
-  return nodeName;
+
+  // We need to maintain node ID in class name since we're using the :global selector (which ensures that style overrides work properly).
+  // ID here ensures that we're not accidentially overriding styles in other components or files.
+  // ID is also prefixed here since that's the pattern used _internally_ for hash IDs.
+  return `_${camelCase(node.id)}_` + nodeName;
 };
 
 // TODO - need to use compoennt name
@@ -501,28 +500,26 @@ export type ComputedNestedStyleInfo = {
   children: ComputedNestedStyleInfo[];
 };
 
-const getNestedCSSStyles = memoize(
-  (
-    node: Node,
-    document: Document,
-    instance?: Instance
-  ): ComputedNestedStyleInfo => {
-    const nodeStyle = getCSSStyle(node, document, instance);
-    return {
-      node,
-      style: nodeStyle,
-      children: hasChildren(node)
-        ? node.children.map((child) => {
-            return getNestedCSSStyles(
-              child,
-              document,
-              node.type == NodeType.Instance ? node : instance
-            );
-          })
-        : [],
-    };
-  }
-);
+const getNestedCSSStyles = (
+  node: Node,
+  document: Document,
+  instance?: Instance
+): ComputedNestedStyleInfo => {
+  const nodeStyle = getCSSStyle(node, document, instance);
+  return {
+    node,
+    style: nodeStyle,
+    children: hasChildren(node)
+      ? node.children.map((child) => {
+          return getNestedCSSStyles(
+            child,
+            document,
+            node.type == NodeType.Instance ? node : instance
+          );
+        })
+      : [],
+  };
+};
 
 const getStyleOverrides = (style: any, overrides: any): any => {
   const newStyle = {};
@@ -540,88 +537,84 @@ const getStyleOverrides = (style: any, overrides: any): any => {
   return newStyle;
 };
 
-const containsStyle = memoize(
-  (
-    info: ComputedNestedStyleInfo,
-    document: Document,
-    instanceOfId?: string
-  ) => {
-    if (Object.keys(info.style).length > 0) {
+const containsStyle = (
+  info: ComputedNestedStyleInfo,
+  document: Document,
+  instanceOfId?: string
+) => {
+  if (Object.keys(info.style).length > 0) {
+    return true;
+  }
+  for (const child of info.children) {
+    if (containsStyle(child, document, instanceOfId)) {
       return true;
     }
-    for (const child of info.children) {
-      if (containsStyle(child, document, instanceOfId)) {
-        return true;
-      }
-    }
-    return false;
   }
-);
+  return false;
+};
 
-const getCSSStyle = memoize(
-  (node: Node, document: Document, instance?: Instance) => {
-    let style: Record<string, string | number> = {};
+const getCSSStyle = (node: Node, document: Document, instance?: Instance) => {
+  let style: Record<string, string | number> = {};
 
-    if (hasVectorProps(node)) {
-      Object.assign(style, getVectorStyle(node));
-    }
-
-    if (node.type === NodeType.Rectangle) {
-      if (node.cornerRadius) {
-        style["border-radius"] = node.cornerRadius + "px";
-      }
-    }
-
-    if (node.type === NodeType.Text) {
-      Object.assign(style, getPositionStyle(node));
-      Object.assign(style, getTextStyle(node));
-
-      const containsNonSolifFill = node.fills.some(
-        (fill) => fill.type !== FillType.SOLID
-      );
-
-      if (containsNonSolifFill) {
-        logNodeWarning(node, `cannot translate non-solid text color to CSS`);
-      }
-
-      // text color must be solid, so search for one
-      const solidFill = node.fills.find(
-        (fill) => fill.type === FillType.SOLID
-      ) as SolidFill;
-      if (solidFill) {
-        style.color = getCSSRGBAColor(solidFill.color);
-      }
-    } else if (
-      node.type === NodeType.Ellipse ||
-      node.type === NodeType.REGULAR_POLYGON ||
-      node.type === NodeType.Star ||
-      node.type === NodeType.Vector
-    ) {
-      Object.assign(style, getPositionStyle(node));
-      if (!node.exportSettings) {
-        logNodeWarning(node, `should be exported since it's a polygon`);
-      }
-    } else if (node.type === NodeType.Frame) {
-      Object.assign(style, getPositionStyle(node));
-      Object.assign(style, getFrameStyle(node));
-    } else {
-      // logNodeWarning(node, `Can't generate styles for ${node.type}`);
-    }
-
-    if (instance && node.type !== NodeType.Instance) {
-      const targetNode = getComponentNestedNode(
-        node,
-        instance,
-        instance.componentId,
-        document
-      );
-      const targetNodeStyle = getCSSStyle(targetNode, document);
-      style = getStyleOverrides(targetNodeStyle, style);
-    }
-
-    return style;
+  if (hasVectorProps(node)) {
+    Object.assign(style, getVectorStyle(node));
   }
-);
+
+  if (node.type === NodeType.Rectangle) {
+    if (node.cornerRadius) {
+      style["border-radius"] = node.cornerRadius + "px";
+    }
+  }
+
+  if (node.type === NodeType.Text) {
+    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getTextStyle(node));
+
+    const containsNonSolifFill = node.fills.some(
+      (fill) => fill.type !== FillType.SOLID
+    );
+
+    if (containsNonSolifFill) {
+      logNodeWarning(node, `cannot translate non-solid text color to CSS`);
+    }
+
+    // text color must be solid, so search for one
+    const solidFill = node.fills.find(
+      (fill) => fill.type === FillType.SOLID
+    ) as SolidFill;
+    if (solidFill) {
+      style.color = getCSSRGBAColor(solidFill.color);
+    }
+  } else if (
+    node.type === NodeType.Ellipse ||
+    node.type === NodeType.REGULAR_POLYGON ||
+    node.type === NodeType.Star ||
+    node.type === NodeType.Vector
+  ) {
+    Object.assign(style, getPositionStyle(node));
+    if (!node.exportSettings) {
+      logNodeWarning(node, `should be exported since it's a polygon`);
+    }
+  } else if (node.type === NodeType.Frame) {
+    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getFrameStyle(node));
+  } else {
+    // logNodeWarning(node, `Can't generate styles for ${node.type}`);
+  }
+
+  if (instance && node.type !== NodeType.Instance) {
+    const targetNode = getComponentNestedNode(
+      node,
+      instance,
+      instance.componentId,
+      document
+    );
+    const targetNodeStyle = getCSSStyle(targetNode, document);
+    style = getStyleOverrides(targetNodeStyle, style);
+  }
+
+  return style;
+};
 
 const getVectorStyle = (node: VectorNodeProps & BaseNode<any>) => {
   const style: any = {};
