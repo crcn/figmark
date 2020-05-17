@@ -37,6 +37,7 @@ import {
   getNodeByPath,
   Instance,
   hasVectorProps,
+  VectorNode,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -515,6 +516,12 @@ const getCSSStyle = memoize(
       Object.assign(style, getVectorStyle(node));
     }
 
+    if (node.type === NodeType.Rectangle) {
+      if (node.cornerRadius) {
+        style["border-radius"] = node.cornerRadius + "px";
+      }
+    }
+
     if (node.type === NodeType.Text) {
       Object.assign(style, getPositionStyle(node));
       Object.assign(style, getTextStyle(node));
@@ -673,15 +680,14 @@ const getFrameStyle = (node: FrameProps & BaseNode<any>) => {
 };
 
 const getPositionStyle = ({
-  absoluteBoundingBox: { x, y, width, height },
-}: {
-  absoluteBoundingBox: Rectangle;
-}) => ({
+  relativeTransform,
+  size,
+}: Pick<VectorNodeProps, "relativeTransform" | "size">) => ({
   position: "absolute",
-  left: Math.round(x) + "px",
-  top: Math.round(y) + "px",
-  width: Math.round(width) + "px",
-  height: Math.round(height) + "px",
+  left: Math.round(relativeTransform[0][2]) + "px",
+  top: Math.round(relativeTransform[1][2]) + "px",
+  width: Math.round(size.x) + "px",
+  height: Math.round(size.y) + "px",
 });
 
 const getFillStyleValue = (node: Node, fills: Fill[]) =>

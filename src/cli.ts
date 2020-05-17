@@ -110,7 +110,7 @@ export const sync = async ({ watch }: SyncOptions) => {
     );
   }
 
-  logInfo(`Loading team designs from Figma 🎨`);
+  logInfo(`Loading team designs from Figma`);
 
   const {
     personalAccessToken,
@@ -135,7 +135,7 @@ export const sync = async ({ watch }: SyncOptions) => {
   if (watch) {
     setTimeout(sync, WATCH_TIMEOUT, { watch });
   } else {
-    logInfo(`Done!`);
+    logInfo(`Done! 👨🏻‍🎨`);
   }
 };
 

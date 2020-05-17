@@ -159,7 +159,7 @@ export type VectorNodeProps = {
   absoluteBoundingBox: Rectangle;
   effects: Effect[];
   size: Vector;
-  relativeTransformTransform: Transform;
+  relativeTransform: Transform;
   isMask: boolean;
   fills: Fill[];
   fillGeometry: Path[];
@@ -290,10 +290,13 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
     (child) => child.name === node.name
   );
 
+  // don't allow numbers in node names
+  const prefix = !node.name || isNaN(Number(node.name.charAt(0))) ? "" : "_";
+
   const postfix =
     nodesThatShareName.length > 1 ? nodesThatShareName.indexOf(node) + 1 : "";
 
-  return camelCase(node.name + postfix);
+  return prefix + camelCase(node.name + postfix);
 };
 
 export const getNodePath = (node: Node, root: Node) => {
