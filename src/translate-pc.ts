@@ -483,8 +483,16 @@ const getNodeClassName = (node: Node, document: Document) => {
 
 // TODO - need to use compoennt name
 const getNodeComponentName = (node: Node, document: Document) => {
-  const nodeName = getUniqueNodeName(node, document);
-  return pascalCase(nodeName);
+  let nodeName = getUniqueNodeName(node, document);
+  nodeName = nodeName.charAt(0).toUpperCase() + nodeName.substr(1);
+
+  // dirty check for class prefix
+  if (nodeName.indexOf("_") !== -1) {
+    const [parentName, compName] = nodeName.split("_");
+    nodeName = parentName + "_" + pascalCase(compName);
+  }
+
+  return nodeName;
 };
 
 export type ComputedNestedStyleInfo = {

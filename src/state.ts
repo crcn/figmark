@@ -3,6 +3,7 @@ import * as path from "path";
 import { CONFIG_FILE_NAME } from "./constants";
 import {memoize} from "./memo";
 import { camelCase } from "lodash";
+import { pascalCase } from "./utils";
 
 export type FileConfig = {
   key: string;
