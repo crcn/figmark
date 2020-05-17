@@ -6,7 +6,6 @@ import * as fs from "fs";
 import * as path from "path";
 import * as fsa from "fs-extra";
 import * as https from "https";
-import * as ora from "ora";
 import { camelCase, kebabCase, snakeCase } from "lodash";
 import {
   Config,
