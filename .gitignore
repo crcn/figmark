@@ -3,3 +3,4 @@ lib
 .DS_Store
 design-generated
 *.pc.d.ts
+.zeplin

@@ -18,10 +18,12 @@ import {
   getNodeExportFileName,
   FileNameFormat,
   CompilerOptions,
+  Project,
+  ProjectFile,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
-import { ProjectFile, Version } from "figma-api/lib/api-types";
+import { Version } from "figma-api/lib/api-types";
 import { logInfo, pascalCase, logWarn } from "./utils";
 
 const cwd = process.cwd();
@@ -96,12 +98,32 @@ const getFileVersions = async (
   return map;
 };
 
+const getTeamProjects = async (client: Figma.Api, teamId: string) => {
+  const projects: Project[] = [];
+  const { projects: remoteProjects } = await client.getTeamProjects(teamId);
+  for (const project of remoteProjects) {
+    const { files: remoteFiles } = await client.getProjectFiles(
+      String(project.id)
+    );
+
+    projects.push({
+      id: project.id,
+      name: project.name,
+      files: remoteFiles.map((file) => ({
+        key: file.key,
+        name: file.name,
+      })),
+    });
+  }
+
+  return projects;
+};
+
 const getTeamFiles = async (client: Figma.Api, teamId: string) => {
+  const projects = await getTeamProjects(client, teamId);
   const allFiles: ProjectFile[] = [];
-  const { projects } = await client.getTeamProjects(teamId);
   for (const project of projects) {
-    const { files } = await client.getProjectFiles(String(project.id));
-    allFiles.push(...files);
+    allFiles.push(...project.files);
   }
 
   return allFiles;
@@ -126,22 +148,33 @@ export const sync = async ({ watch }: SyncOptions) => {
   }: Config = readConfigSync(process.cwd());
 
   const client = new Figma.Api({ personalAccessToken });
-  const files = await getTeamFiles(client, teamId);
+  const projects = await getTeamProjects(client, teamId);
+  for (const project of projects) {
+    if (!project.files.length) {
+      continue;
+    }
 
-  // spinner.stop();
-  for (const file of files) {
-    const fileVersion =
-      (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
-    logInfo(`Loading project: ${file.name}@${fileVersion}`);
-
-    await downloadFile(
-      client,
-      file.key,
-      fileVersion,
-      fileNameFormat,
-      compilerOptions,
-      dest
+    const projectDest = path.join(
+      dest,
+      formatFileName(project.name, fileNameFormat)
     );
+    fsa.mkdirpSync(projectDest);
+
+    // spinner.stop();
+    for (const file of project.files) {
+      const fileVersion =
+        (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
+      logInfo(`Loading project: ${file.name}@${fileVersion}`);
+
+      await downloadFile(
+        client,
+        file.key,
+        fileVersion,
+        fileNameFormat,
+        compilerOptions,
+        projectDest
+      );
+    }
   }
 
   if (watch) {
@@ -196,15 +229,6 @@ const downloadFile = async (
     `${formatFileName(file.name, fileNameFormat)}${PC_FILE_EXTENSION}`
   );
 
-  // TODO - need to import deps
-  // for (const id in file.components) {
-  //   const component = file.components[id];
-  //   if (component.key) {
-  //     console.log("LOADING", component);
-  //     const result = await client.getComponent(component.key);
-  //     console.log("LOADED", result);
-  //   }
-  // }
   const pcContent = translateFigmaProjectToPaperclip(file, compilerOptions);
 
   if (fs.existsSync(filePath)) {

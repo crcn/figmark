@@ -24,6 +24,17 @@ export type Config = {
   compilerOptions: CompilerOptions;
 };
 
+export type Project = {
+  id: number;
+  name: string;
+  files: ProjectFile[];
+};
+
+export type ProjectFile = {
+  key: string;
+  name: string;
+};
+
 export enum FileNameFormat {
   Preserve = "preserve",
   CamelCase = "camel-case",
