@@ -10,7 +10,9 @@
   "license": "ISC",
   "devDependencies": {
     "husky": "^4.2.5",
-    "prettier": "^2.0.5"
+    "prettier": "^2.0.5",
+    "react": "^16.13.1",
+    "react-dom": "^16.13.1"
   },
   "dependencies": {
     "paperclip": "^11.0.67",

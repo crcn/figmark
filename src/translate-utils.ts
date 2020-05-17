@@ -1,15 +1,20 @@
+import { CompilerOptions } from "./state";
+
 export type TranslateContext = {
   buffer: string;
   lineNumber: number;
   currentIndexKey?: string;
+  compilerOptions: CompilerOptions;
   isNewLine: boolean;
   indent: string;
   keyCount: number;
 };
 
 export const createTranslateContext = (
+  compilerOptions: CompilerOptions,
   indent: string = "  "
 ): TranslateContext => ({
+  compilerOptions,
   buffer: "",
   isNewLine: true,
   lineNumber: 0,

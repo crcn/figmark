@@ -17,6 +17,7 @@ import {
   ExportSettings,
   getNodeExportFileName,
   FileNameFormat,
+  CompilerOptions,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
@@ -63,6 +64,9 @@ export const init = async () => {
     personalAccessToken,
     teamId: teamId,
     fileVersions,
+    compilerOptions: {
+      includeAbsoluteLayout: true,
+    },
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
@@ -118,6 +122,7 @@ export const sync = async ({ watch }: SyncOptions) => {
     teamId,
     fileVersions,
     fileNameFormat,
+    compilerOptions,
   }: Config = readConfigSync(process.cwd());
 
   const client = new Figma.Api({ personalAccessToken });
@@ -129,7 +134,14 @@ export const sync = async ({ watch }: SyncOptions) => {
       (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
     logInfo(`Loading project: ${file.name}@${fileVersion}`);
 
-    await downloadFile(client, file.key, fileVersion, fileNameFormat, dest);
+    await downloadFile(
+      client,
+      file.key,
+      fileVersion,
+      fileNameFormat,
+      compilerOptions,
+      dest
+    );
   }
 
   if (watch) {
@@ -169,6 +181,7 @@ const downloadFile = async (
   fileKey: string,
   version: string,
   fileNameFormat: FileNameFormat,
+  compilerOptions: CompilerOptions,
   dest: string
 ) => {
   const destPath = path.join(process.cwd(), dest);
@@ -192,7 +205,7 @@ const downloadFile = async (
   //     console.log("LOADED", result);
   //   }
   // }
-  const pcContent = translateFigmaProjectToPaperclip(file);
+  const pcContent = translateFigmaProjectToPaperclip(file, compilerOptions);
 
   if (fs.existsSync(filePath)) {
     const existingFileContent = fs.readFileSync(filePath, "utf8");

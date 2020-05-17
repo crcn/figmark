@@ -38,14 +38,18 @@ import {
   Instance,
   hasVectorProps,
   VectorNode,
+  CompilerOptions,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
 // const memoize = require("fast-memoize");
 const memoize = (fn) => fn;
 
-export const translateFigmaProjectToPaperclip = (file) => {
-  let context = createTranslateContext();
+export const translateFigmaProjectToPaperclip = (
+  file,
+  compilerOptions: CompilerOptions
+) => {
+  let context = createTranslateContext(compilerOptions);
 
   context = addBuffer(`\n<!--\n`, context);
   context = startBlock(context);
@@ -59,8 +63,10 @@ export const translateFigmaProjectToPaperclip = (file) => {
   context = addBuffer(`\n<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
   context = translateComponents(file.document, file.document, context);
 
-  context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
-  context = translatePreviews(file.document, context);
+  if (compilerOptions.includePreviews !== false) {
+    context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
+    context = translatePreviews(file.document, context);
+  }
   return context.buffer;
 };
 
@@ -95,6 +101,10 @@ const translateComponent = (
   }
 
   const componentName = getNodeComponentName(node, document);
+  const withAbsoluteLayoutAttr =
+    context.compilerOptions.includeAbsoluteLayout !== false
+      ? `data-with-absolute-layout={withAbsoluteLayout?}`
+      : ``;
 
   if (node.exportSettings && node.exportSettings.length) {
     context = addBuffer(
@@ -102,7 +112,7 @@ const translateComponent = (
         node,
         document,
         node.exportSettings[0]
-      )}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
+      )}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
         document
       )} {className?}">\n\n`,
@@ -114,7 +124,7 @@ const translateComponent = (
 
   if (node.type === NodeType.Vector) {
     context = addBuffer(
-      `<svg export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
+      `<svg export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
         document
       )} {className?}">\n`,
@@ -128,7 +138,7 @@ const translateComponent = (
     const tagName = node.type === NodeType.Text ? `span` : `div`;
 
     context = addBuffer(
-      `<${tagName} export component as="${componentName}" data-with-absolute-layout={withAbsoluteLayout} className="${getNodeClassName(
+      `<${tagName} export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
         document
       )} {className?}">\n`,
@@ -184,10 +194,11 @@ const translateComponentPreview = (
     `<${getNodeComponentName(
       node,
       document
-    )} component as="${getPreviewComponentName(
-      node.id,
-      document
-    )}" withAbsoluteLayout {className}`,
+    )} component as="${getPreviewComponentName(node.id, document)}"${
+      context.compilerOptions.includeAbsoluteLayout !== false
+        ? " withAbsoluteLayout"
+        : ""
+    } {className}`,
     context
   );
 
@@ -213,7 +224,11 @@ const translatePreview = (
     );
   } else {
     context = addBuffer(
-      `<${getNodeComponentName(node, document)} withAbsoluteLayout`,
+      `<${getNodeComponentName(node, document)}${
+        context.compilerOptions.includeAbsoluteLayout !== false
+          ? " withAbsoluteLayout"
+          : ""
+      }`,
       context
     );
 
@@ -281,7 +296,11 @@ const translateInstancePreview = (
   includeClasses: boolean = true
 ) => {
   context = addBuffer(
-    `<${getPreviewComponentName(componentId, document)} withAbsoluteLayout`,
+    `<${getPreviewComponentName(componentId, document)}${
+      context.compilerOptions.includeAbsoluteLayout !== false
+        ? " withAbsoluteLayout"
+        : ""
+    }`,
     context
   );
   if (includeClasses) {
@@ -339,7 +358,9 @@ const translateNodeClassNames = (
       document,
       context,
       false,
-      skipComponents
+      skipComponents,
+      null,
+      true
     );
   }
   return context;
@@ -351,7 +372,8 @@ const translateClassNames = (
   context: TranslateContext,
   isNested: boolean,
   skipComponents: boolean,
-  instance?: Instance
+  instance?: Instance,
+  isRoot?: boolean
 ) => {
   if (info.node.type === NodeType.Canvas) {
     return info.children.reduce(
@@ -361,7 +383,9 @@ const translateClassNames = (
           document,
           context,
           false,
-          skipComponents
+          skipComponents,
+          null,
+          isRoot
         ),
       context
     );
@@ -381,10 +405,15 @@ const translateClassNames = (
           document
         );
 
+  // components are already compiled, so skip.
+  if (targetNode.type === NodeType.Component && skipComponents) {
+    return context;
+  }
+
   const nodeSelector = `.${getNodeClassName(targetNode, document)}`;
 
   if (isNested) {
-    context = addBuffer(`& > :global(${nodeSelector}) {\n`, context);
+    context = addBuffer(`& :global(${nodeSelector}) {\n`, context);
   } else {
     context = addBuffer(`:global(${nodeSelector}) {\n`, context);
   }
@@ -405,7 +434,10 @@ const translateClassNames = (
   }
 
   // ABS layout should be opt-in since it's non-responsive.
-  if (hasLayoutDeclaration) {
+  if (
+    hasLayoutDeclaration &&
+    context.compilerOptions.includeAbsoluteLayout !== false
+  ) {
     context = addBuffer(`&[data-with-absolute-layout] {\n`, context);
     context = startBlock(context);
     for (const key in info.style) {
@@ -431,7 +463,10 @@ const translateClassNames = (
     );
   }, context);
   context = endBlock(context);
-  context = addBuffer(`}\n\n`, context);
+  context = addBuffer(`}\n`, context);
+  if (isRoot) {
+    context = addBuffer(`\n`, context);
+  }
   return context;
 };
 

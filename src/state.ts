@@ -10,12 +10,18 @@ export type FileConfig = {
   version?: string;
 };
 
+export type CompilerOptions = {
+  includeAbsoluteLayout?: boolean;
+  includePreviews?: boolean;
+};
+
 export type Config = {
   fileNameFormat?: FileNameFormat;
   teamId?: string;
   personalAccessToken: string;
   dest: string;
   fileVersions?: Record<string, string>;
+  compilerOptions: CompilerOptions;
 };
 
 export enum FileNameFormat {
@@ -287,15 +293,23 @@ export const getNodeExportFileName = (
     settings.constraint.value
   }.${settings.format.toLowerCase()}`;
 export const getUniqueNodeName = (node: Node, document: Document) => {
-  const nodesThatShareName = flattenNodes(document).filter(
-    (child) => child.name === node.name
-  );
+  const nodesThatShareName = flattenNodes(document)
+    .filter((child) => child.name === node.name)
+    .sort((a, b) => {
+      // move components to the
+      if (a.type === NodeType.Component) return -1;
+      if (b.type === NodeType.Component) return 1;
+      return 0;
+    });
 
   // don't allow numbers in node names
   const prefix = !node.name || isNaN(Number(node.name.charAt(0))) ? "" : "_";
 
+  // first instance doesn't use postfix
   const postfix =
-    nodesThatShareName.length > 1 ? nodesThatShareName.indexOf(node) + 1 : "";
+    nodesThatShareName.length > 1 && nodesThatShareName[0] !== node
+      ? nodesThatShareName.indexOf(node) + 1
+      : "";
 
   return prefix + camelCase(node.name + postfix);
 };
