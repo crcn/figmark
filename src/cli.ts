@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-import { CONFIG_FILE_NAME, PC_FILE_EXTENSION } from "./constants";
+import {
+  CONFIG_FILE_NAME,
+  PC_FILE_EXTENSION,
+  DEPENDENCIES_NAMESPACE,
+} from "./constants";
 import * as Figma from "figma-api";
 import * as inquirer from "inquirer";
 import * as fs from "fs";
@@ -19,6 +23,9 @@ import {
   CompilerOptions,
   Project,
   ProjectFile,
+  Component,
+  NodeType,
+  Dependency,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
@@ -146,6 +153,8 @@ export const sync = async ({ watch }: SyncOptions) => {
     compilerOptions,
   }: Config = readConfigSync(process.cwd());
 
+  const syncDir = path.join(cwd, dest);
+
   const client = new Figma.Api({ personalAccessToken });
   const projects = await getTeamProjects(client, teamId);
   for (const project of projects) {
@@ -153,25 +162,22 @@ export const sync = async ({ watch }: SyncOptions) => {
       continue;
     }
 
-    const projectDest = path.join(
-      dest,
-      formatFileName(project.name, fileNameFormat)
-    );
-    fsa.mkdirpSync(projectDest);
-
     // spinner.stop();
     for (const file of project.files) {
       const fileVersion =
         (fileVersions && fileVersions[file.key]) || LATEST_VERSION_NAME;
+
       logInfo(`Loading project: ${file.name}@${fileVersion}`);
 
-      await downloadFile(
+      await downloadProjectFile(
         client,
         file.key,
         fileVersion,
         fileNameFormat,
         compilerOptions,
-        projectDest
+        project,
+        projects,
+        syncDir
       );
     }
   }
@@ -188,6 +194,7 @@ const EXTENSIONS = {
   "image/svg+xml": ".svg",
   "image/jpeg": ".jpg",
 };
+
 const formatFileName = (name: string, fileNameFormat: FileNameFormat) => {
   switch (fileNameFormat) {
     case FileNameFormat.CamelCase: {
@@ -208,27 +215,44 @@ const formatFileName = (name: string, fileNameFormat: FileNameFormat) => {
   }
 };
 
-const downloadFile = async (
+const downloadProjectFile = async (
   client: Figma.Api,
   fileKey: string,
   version: string,
   fileNameFormat: FileNameFormat,
   compilerOptions: CompilerOptions,
+  project: Project,
+  projects: Project[],
   dest: string
 ) => {
-  const destPath = path.join(process.cwd(), dest);
   const file = await client.getFile(fileKey, {
     geometry: "paths",
     version: version === LATEST_VERSION_NAME ? undefined : version,
   });
-  // const res = await client.get
+  const filePath = getFileKeySourcePath(
+    fileKey,
+    dest,
+    fileNameFormat,
+    projects
+  );
+  const fileDir = path.dirname(filePath);
+  fsa.mkdirpSync(fileDir);
 
-  const filePath = path.join(
-    destPath,
-    `${formatFileName(file.name, fileNameFormat)}${PC_FILE_EXTENSION}`
+  const importedDocuments = await getImportedDocuments(
+    client,
+    file,
+    fileKey,
+    dest,
+    fileNameFormat,
+    projects
   );
 
-  const pcContent = translateFigmaProjectToPaperclip(file, compilerOptions);
+  const pcContent = translateFigmaProjectToPaperclip(
+    file,
+    filePath,
+    compilerOptions,
+    importedDocuments
+  );
 
   if (fs.existsSync(filePath)) {
     const existingFileContent = fs.readFileSync(filePath, "utf8");
@@ -239,13 +263,8 @@ const downloadFile = async (
   }
 
   fs.writeFileSync(filePath, pcContent);
-  await downloadImages(client, fileKey, destPath);
-  await downloadNodeImages(
-    client,
-    fileKey,
-    file.document as Document,
-    destPath
-  );
+  await downloadImages(client, fileKey, fileDir);
+  await downloadNodeImages(client, fileKey, file.document as Document, fileDir);
 };
 
 const downloadImages = async (
@@ -259,6 +278,70 @@ const downloadImages = async (
   for (const refId in result.meta.images) {
     await downloadImageRef(client, destPath, refId, result.meta.images[refId]);
   }
+};
+
+const getImportedDocuments = async (
+  client: Figma.Api,
+  file,
+  fileKey: string,
+  syncDir,
+  fileNameFormat: FileNameFormat,
+  projects: Project[]
+) => {
+  const importedDocuments: Record<string, Dependency> = {};
+
+  for (const importId in file.components) {
+    const componentRef = file.components[importId];
+    if (componentRef.key) {
+      const componentInfo = (await client.getComponent(
+        componentRef.key
+      )) as any;
+      if (componentInfo.meta.file_key === fileKey) {
+        continue;
+      }
+      const file = await client.getFile(componentInfo.meta.file_key);
+
+      const sourceFilePath = getFileKeySourcePath(
+        componentInfo.meta.file_key,
+        syncDir,
+        fileNameFormat,
+        projects
+      );
+      const info = importedDocuments[sourceFilePath] || {
+        idAliases: {},
+        document: file.document as any,
+      };
+
+      info.idAliases[importId] = componentInfo.meta.node_id;
+      importedDocuments[sourceFilePath] = info;
+    }
+  }
+  return importedDocuments;
+};
+
+const getFileKeySourcePath = (
+  key: string,
+  dest: string,
+  fileNameFormat: FileNameFormat,
+  projects: Project[]
+) => {
+  let projectName = DEPENDENCIES_NAMESPACE;
+  let fileName = key;
+
+  for (const project of projects) {
+    for (const file of project.files) {
+      if (file.key === key) {
+        projectName = project.name;
+        fileName = file.name;
+        break;
+      }
+    }
+  }
+  return path.join(
+    dest,
+    formatFileName(projectName, fileNameFormat),
+    `${formatFileName(fileName, fileNameFormat)}${PC_FILE_EXTENSION}`
+  );
 };
 
 const downloadNodeImages = async (

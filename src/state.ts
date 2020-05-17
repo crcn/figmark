@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { CONFIG_FILE_NAME } from "./constants";
-import {memoize} from "./memo";
+import { memoize } from "./memo";
 import { camelCase } from "lodash";
 import { pascalCase } from "./utils";
 
@@ -13,6 +13,13 @@ export type FileConfig = {
 export type CompilerOptions = {
   includeAbsoluteLayout?: boolean;
   includePreviews?: boolean;
+};
+
+export type DependencyMap = Record<string, Dependency>;
+
+export type Dependency = {
+  idAliases: Record<string, string>;
+  document: Document;
 };
 
 export type Config = {
@@ -313,7 +320,7 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
       return 0;
     });
 
-  let prefix = '';
+  let prefix = "";
   const ownerComponent = getOwnerComponent(node, document);
 
   if (ownerComponent) {
@@ -323,7 +330,6 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
   // don't allow numbers in node names
   prefix += !node.name || isNaN(Number(node.name.charAt(0))) ? "" : "_";
 
-  // first instance doesn't use postfix
   const postfix =
     nodesThatShareName.length > 1 && nodesThatShareName[0] !== node
       ? nodesThatShareName.indexOf(node) + 1
@@ -373,13 +379,26 @@ export const getOwnerComponent = (node: Node, document: Document) => {
   return null;
 };
 
+export const getOwnerInstance = (node: Node, document: Document) => {
+  if (node.type === NodeType.Instance) {
+    return null;
+  }
+  const ancestors = getNodeAncestors(node, document);
+  for (const ancestor of ancestors) {
+    if (ancestor.type === NodeType.Instance) {
+      return ancestor;
+    }
+  }
+  return null;
+};
+
 export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "");
 
 export const getNodeAncestors = (node: Node, document: Document): Node[] => {
   const childParentMap = getChildParentMap(document);
   const ancestors = [];
   let current = node;
-  while(true) {
+  while (true) {
     current = childParentMap[current.id];
     if (!current) {
       break;
@@ -404,7 +423,6 @@ const getChildParentMap = memoize((document: Document) => {
 
   return childParentMap;
 });
-
 
 const flattenNodes2 = (node: Node, allNodes: Node[] = []) => {
   allNodes.push(node);

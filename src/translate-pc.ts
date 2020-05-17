@@ -40,27 +40,40 @@ import {
   VectorNode,
   CompilerOptions,
   getOwnerComponent,
+  DependencyMap,
+  getOwnerInstance,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
+import * as path from "path";
 import { camelCase } from "lodash";
+import { PaintType } from "figma-api";
 
 export const translateFigmaProjectToPaperclip = (
   file,
-  compilerOptions: CompilerOptions
+  filePath: string,
+  compilerOptions: CompilerOptions,
+  importedDependencyMap: DependencyMap
 ) => {
-  let context = createTranslateContext(compilerOptions);
+  let context = createTranslateContext(
+    file.document,
+    filePath,
+    compilerOptions,
+    importedDependencyMap
+  );
 
   context = addBuffer(`\n<!--\n`, context);
   context = startBlock(context);
   context = addBuffer(`!! AUTO GENERATED, EDIT WITH CAUTION !!\n`, context);
   context = endBlock(context);
-  context = addBuffer(`-->`, context);
+  context = addBuffer(`-->\n\n`, context);
 
-  context = addBuffer(`\n\n<!-- STYLES -->\n\n`, context);
+  context = translateImports(context);
+
+  context = addBuffer(`<!-- STYLES -->\n\n`, context);
   context = translateStyles(file.document, context);
 
-  context = addBuffer(`\n<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
+  context = addBuffer(`<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
   context = translateComponents(file.document, file.document, context);
 
   if (compilerOptions.includePreviews !== false) {
@@ -68,6 +81,85 @@ export const translateFigmaProjectToPaperclip = (
     context = translatePreviews(file.document, context);
   }
   return context.buffer;
+};
+
+const translateImports = (context: TranslateContext) => {
+  const importFilePaths = getImportFilePaths(context);
+  for (let i = 0, { length } = importFilePaths; i < length; i++) {
+    const filePath = importFilePaths[i];
+    const relativePath = path.relative(
+      path.dirname(context.filePath),
+      filePath
+    );
+    context = addBuffer(
+      `<import as="module${i}" src="${relativePath}" />\n`,
+      context
+    );
+  }
+
+  context = addBuffer(`\n`, context);
+
+  return context;
+};
+
+const getImportFilePaths = (context: TranslateContext) => {
+  return Object.keys(context.importedDependencyMap);
+};
+
+const getNodeSourceDocument = (
+  id: string,
+  context: TranslateContext
+): Document => {
+  const dep =
+    context.importedDependencyMap[getImportedNodeDocumentPath(id, context)];
+  return dep ? dep.document : context.document;
+};
+
+const getSourceComponent = (
+  id: string,
+  context: TranslateContext
+): Component => {
+  return getNodeById(
+    getSourceNodeId(id, context),
+    getNodeSourceDocument(id, context)
+  ) as Component;
+};
+
+const getSourceNodeId = (id: string, context: TranslateContext) => {
+  const dep = getImportedDependency(id, context);
+  return dep ? dep.idAliases[id] : id;
+};
+
+const isImportedComponent = (id: string, context: TranslateContext) => {
+  return getNodeSourceDocument(id, context) !== context.document;
+};
+
+const getImportedDependency = (id: string, context: TranslateContext) => {
+  return context.importedDependencyMap[
+    getImportedNodeDocumentPath(id, context)
+  ];
+};
+
+const getImportedNodeDocumentPath = (
+  id: string,
+  context: TranslateContext
+): string => {
+  for (const filePath in context.importedDependencyMap) {
+    const dep = context.importedDependencyMap[filePath];
+    const idAlias = dep.idAliases[id];
+    if (getNodeById(idAlias, dep.document) || getNodeById(id, dep.document))
+      return filePath;
+  }
+  return null;
+};
+
+const getImportedComponentModuleName = (
+  id: string,
+  context: TranslateContext
+) => {
+  return `module${getImportFilePaths(context).indexOf(
+    getImportedNodeDocumentPath(id, context)
+  )}`;
 };
 
 const translateComponents = (
@@ -114,7 +206,7 @@ const translateComponent = (
         node.exportSettings[0]
       )}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
-        document
+        context
       )} {className?}">\n\n`,
       context
     );
@@ -126,7 +218,7 @@ const translateComponent = (
     context = addBuffer(
       `<svg export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
-        document
+        context
       )} {className?}">\n`,
       context
     );
@@ -140,7 +232,7 @@ const translateComponent = (
     context = addBuffer(
       `<${tagName} export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
-        document
+        context
       )} {className?}">\n`,
       context
     );
@@ -181,20 +273,31 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
   return context;
 };
 
-const getPreviewComponentName = (nodeId: string, document: Document) =>
-  "_Preview_" +
-  pascalCase(getNodeById(nodeId, document).name + "_" + cleanupNodeId(nodeId));
+const getPreviewComponentName = (nodeId: string, context: TranslateContext) => {
+  // note we fetch component since nodeId & id might not match up (nodeId may be imported)
+  const component = getSourceComponent(nodeId, context);
+  let name =
+    "_Preview_" +
+    pascalCase(component.name + "_" + cleanupNodeId(component.id));
+
+  if (isImportedComponent(nodeId, context)) {
+    name = getImportedComponentModuleName(nodeId, context) + ":" + name;
+  }
+
+  return name;
+};
 
 const translateComponentPreview = (
   node: Component,
   document: Document,
   context: TranslateContext
 ) => {
+  // Note that previews are exported so that they can be used in other component files.
   context = addBuffer(
     `<${getNodeComponentName(
       node,
       document
-    )} component as="${getPreviewComponentName(node.id, document)}"${
+    )} export component as="${getPreviewComponentName(node.id, context)}"${
       context.compilerOptions.includeAbsoluteLayout !== false
         ? " withAbsoluteLayout"
         : ""
@@ -204,7 +307,10 @@ const translateComponentPreview = (
 
   context = addBuffer(`>\n`, context);
   context = translatePreviewChildren(node, document, context, true);
-  context = addBuffer(`</${getNodeComponentName(node, document)}>\n`, context);
+  context = addBuffer(
+    `</${getNodeComponentName(node, document)}>\n\n`,
+    context
+  );
 
   return context;
 };
@@ -278,12 +384,12 @@ const getComponentNestedNode = (
   nestedInstanceNode: Node,
   instance: Node,
   componentId: string,
-  document: Document
+  context: TranslateContext
 ) => {
-  const component = getNodeById(componentId, document);
+  const component = getSourceComponent(componentId, context);
   const nodePath = getNodePath(nestedInstanceNode, instance);
   if (!component) {
-    throw new Error(`Cannot find component instance: ${componentId}`);
+    throw new Error(`Cannot find component: ${componentId}`);
   }
   return getNodeByPath(nodePath, component);
 };
@@ -296,7 +402,7 @@ const translateInstancePreview = (
   includeClasses: boolean = true
 ) => {
   context = addBuffer(
-    `<${getPreviewComponentName(componentId, document)}${
+    `<${getPreviewComponentName(componentId, context)}${
       context.compilerOptions.includeAbsoluteLayout !== false
         ? " withAbsoluteLayout"
         : ""
@@ -305,7 +411,7 @@ const translateInstancePreview = (
   );
   if (includeClasses) {
     context = addBuffer(
-      ` className="${getNodeClassName(instance, document)}"`,
+      ` className="${getNodeClassName(instance, context)}"`,
       context
     );
   }
@@ -314,12 +420,12 @@ const translateInstancePreview = (
       textNode,
       instance,
       componentId,
-      document
+      context
     );
     context = addBuffer(
       ` ${getUniqueNodeName(
         componentTextNode,
-        document
+        getNodeSourceDocument(componentTextNode.id, context)
       )}_text={<fragment>${translateTextCharacters(
         textNode.characters
       )}</fragment>}`,
@@ -331,7 +437,6 @@ const translateInstancePreview = (
 };
 
 const translateStyles = (document: Document, context: TranslateContext) => {
-  const allNodes: Node[] = flattenNodes(document);
   context = addBuffer(`<style>\n`, context);
   context = startBlock(context);
   const allComponents = getAllComponents(document);
@@ -352,7 +457,7 @@ const translateNodeClassNames = (
     context = translateClassNames(
       getNestedCSSStyles(
         node,
-        document,
+        context,
         node.type === NodeType.Instance ? node : null
       ),
       document,
@@ -399,7 +504,7 @@ const translateClassNames = (
           info.node,
           instance,
           instance.componentId,
-          document
+          context
         );
 
   // components are already compiled, so skip.
@@ -407,7 +512,7 @@ const translateClassNames = (
     return context;
   }
 
-  const nodeSelector = `.${getNodeClassName(targetNode, document)}`;
+  const nodeSelector = `.${getNodeClassName(targetNode, context)}`;
 
   if (isNested) {
     context = addBuffer(`& :global(${nodeSelector}) {\n`, context);
@@ -471,8 +576,11 @@ const isLayoutDeclaration = (key: string) =>
   /position|left|top|width|height/.test(key);
 
 // TODO - need to use compoennt name
-const getNodeClassName = (node: Node, document: Document) => {
-  const nodeName = getUniqueNodeName(node, document);
+const getNodeClassName = (node: Node, context: TranslateContext) => {
+  const nodeName = getUniqueNodeName(
+    node,
+    getNodeSourceDocument(node.id, context)
+  );
 
   // We need to maintain node ID in class name since we're using the :global selector (which ensures that style overrides work properly).
   // ID here ensures that we're not accidentially overriding styles in other components or files.
@@ -502,10 +610,10 @@ export type ComputedNestedStyleInfo = {
 
 const getNestedCSSStyles = (
   node: Node,
-  document: Document,
+  context: TranslateContext,
   instance?: Instance
 ): ComputedNestedStyleInfo => {
-  const nodeStyle = getCSSStyle(node, document, instance);
+  const nodeStyle = getCSSStyle(node, context, instance);
   return {
     node,
     style: nodeStyle,
@@ -513,7 +621,7 @@ const getNestedCSSStyles = (
       ? node.children.map((child) => {
           return getNestedCSSStyles(
             child,
-            document,
+            context,
             node.type == NodeType.Instance ? node : instance
           );
         })
@@ -553,11 +661,14 @@ const containsStyle = (
   return false;
 };
 
-const getCSSStyle = (node: Node, document: Document, instance?: Instance) => {
+const getCSSStyle = (
+  node: Node,
+  context: TranslateContext,
+  instance?: Instance
+) => {
   let style: Record<string, string | number> = {};
-
   if (hasVectorProps(node)) {
-    Object.assign(style, getVectorStyle(node));
+    Object.assign(style, getVectorStyle(node, context));
   }
 
   if (node.type === NodeType.Rectangle) {
@@ -567,7 +678,7 @@ const getCSSStyle = (node: Node, document: Document, instance?: Instance) => {
   }
 
   if (node.type === NodeType.Text) {
-    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getPositionStyle(node, context));
     Object.assign(style, getTextStyle(node));
 
     const containsNonSolifFill = node.fills.some(
@@ -591,13 +702,13 @@ const getCSSStyle = (node: Node, document: Document, instance?: Instance) => {
     node.type === NodeType.Star ||
     node.type === NodeType.Vector
   ) {
-    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getPositionStyle(node, context));
     if (!node.exportSettings) {
       logNodeWarning(node, `should be exported since it's a polygon`);
     }
   } else if (node.type === NodeType.Frame) {
-    Object.assign(style, getPositionStyle(node));
-    Object.assign(style, getFrameStyle(node));
+    Object.assign(style, getPositionStyle(node, context));
+    Object.assign(style, getFrameStyle(node, context));
   } else {
     // logNodeWarning(node, `Can't generate styles for ${node.type}`);
   }
@@ -607,19 +718,22 @@ const getCSSStyle = (node: Node, document: Document, instance?: Instance) => {
       node,
       instance,
       instance.componentId,
-      document
+      context
     );
-    const targetNodeStyle = getCSSStyle(targetNode, document);
+    const targetNodeStyle = getCSSStyle(targetNode, context);
     style = getStyleOverrides(targetNodeStyle, style);
   }
 
   return style;
 };
 
-const getVectorStyle = (node: VectorNodeProps & BaseNode<any>) => {
+const getVectorStyle = (
+  node: VectorNodeProps & BaseNode<any>,
+  context: TranslateContext
+) => {
   const style: any = {};
   if (node.absoluteBoundingBox) {
-    Object.assign(style, getPositionStyle(node));
+    Object.assign(style, getPositionStyle(node, context));
   }
   if (node.fills.length) {
     const value = getFillStyleValue(node, node.fills);
@@ -713,25 +827,57 @@ const getEffectsStyle = (node: Node, effects: Effect[]) => {
   return newStyle;
 };
 
-const getFrameStyle = (node: FrameProps & BaseNode<any>) => {
+const getFrameStyle = (
+  node: FrameProps & BaseNode<any>,
+  context: TranslateContext
+) => {
   const style: any = {};
-  Object.assign(style, getVectorStyle(node));
+  Object.assign(style, getVectorStyle(node, context));
   if (node.clipsContent) {
     style.overflow = "hidden";
   }
   return style;
 };
 
-const getPositionStyle = ({
-  relativeTransform,
-  size,
-}: Pick<VectorNodeProps, "relativeTransform" | "size">) => ({
-  position: "absolute",
-  left: Math.round(relativeTransform[0][2]) + "px",
-  top: Math.round(relativeTransform[1][2]) + "px",
-  width: Math.round(size.x) + "px",
-  height: Math.round(size.y) + "px",
-});
+const getPositionStyle = (
+  {
+    absoluteBoundingBox,
+    relativeTransform,
+    size,
+  }: Pick<
+    VectorNodeProps,
+    "relativeTransform" | "size" | "absoluteBoundingBox"
+  >,
+  context: TranslateContext
+) => {
+  if (context.compilerOptions.includeAbsoluteLayout === false) {
+    return {};
+  }
+
+  // relativeTransform may not be present, so we use absoluteBoundingBox as a
+  // fallback.
+  const { left, top, width, height } = relativeTransform
+    ? {
+        left: relativeTransform[0][2],
+        top: relativeTransform[1][2],
+        width: size.x,
+        height: size.y,
+      }
+    : {
+        left: absoluteBoundingBox.x,
+        top: absoluteBoundingBox.y,
+        width: absoluteBoundingBox.width,
+        height: absoluteBoundingBox.height,
+      };
+
+  return {
+    position: "absolute",
+    left: Math.round(left) + "px",
+    top: Math.round(top) + "px",
+    width: Math.round(width) + "px",
+    height: Math.round(height) + "px",
+  };
+};
 
 const getFillStyleValue = (node: Node, fills: Fill[]) =>
   fills

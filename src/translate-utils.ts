@@ -1,19 +1,28 @@
-import { CompilerOptions } from "./state";
+import { CompilerOptions, Document, DependencyMap } from "./state";
 
 export type TranslateContext = {
   buffer: string;
+  filePath: string;
+  document: Document;
   lineNumber: number;
   currentIndexKey?: string;
   compilerOptions: CompilerOptions;
+  importedDependencyMap: DependencyMap;
   isNewLine: boolean;
   indent: string;
   keyCount: number;
 };
 
 export const createTranslateContext = (
+  document: Document,
+  filePath: string,
   compilerOptions: CompilerOptions,
+  importedDependencyMap: DependencyMap,
   indent: string = "  "
 ): TranslateContext => ({
+  document,
+  filePath,
+  importedDependencyMap,
   compilerOptions,
   buffer: "",
   isNewLine: true,
