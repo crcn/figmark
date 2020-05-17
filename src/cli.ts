@@ -3,6 +3,7 @@ import {
   CONFIG_FILE_NAME,
   PC_FILE_EXTENSION,
   DEPENDENCIES_NAMESPACE,
+  DEFAULT_EXPORT_SETTINGS,
 } from "./constants";
 import * as Figma from "figma-api";
 import * as inquirer from "inquirer";
@@ -26,6 +27,7 @@ import {
   Component,
   NodeType,
   Dependency,
+  isVectorLike,
 } from "./state";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
@@ -135,7 +137,7 @@ const getTeamFiles = async (client: Figma.Api, teamId: string) => {
   return allFiles;
 };
 
-export const sync = async ({ watch }: SyncOptions) => {
+export const pull = async ({ watch }: SyncOptions) => {
   if (!fs.existsSync(configFilePath)) {
     return console.error(
       `No config found -- try running "figmark init" first.`
@@ -183,7 +185,7 @@ export const sync = async ({ watch }: SyncOptions) => {
   }
 
   if (watch) {
-    setTimeout(sync, WATCH_TIMEOUT, { watch });
+    setTimeout(pull, WATCH_TIMEOUT, { watch });
   } else {
     logInfo(`Done! 👨🏻‍🎨`);
   }
@@ -352,7 +354,7 @@ const downloadNodeImages = async (
 ) => {
   const allNodes = flattenNodes(document);
 
-  const nodeIdsByExport: Record<
+  let nodeIdsByExport: Record<
     string,
     {
       settings: ExportSettings;
@@ -362,31 +364,32 @@ const downloadNodeImages = async (
 
   for (const child of allNodes) {
     if (isExported(child)) {
-      if (!child.exportSettings) {
-        continue;
-      }
-      for (const settings of child.exportSettings) {
-        if (settings.format === "PDF") {
+      for (const setting of child.exportSettings) {
+        if (setting.format === "PDF") {
           logWarning(`Cannot download PDF for layer: "${child.name}"`);
           continue;
         }
 
-        if (settings.constraint.type !== "SCALE") {
+        if (setting.constraint.type !== "SCALE") {
           logWarning(
             `Cannot download "${child.name}" export since it doesn't have SCALE constraint.`
           );
           continue;
         }
-        const key =
-          settings.format +
-          settings.constraint.type +
-          settings.constraint.value;
 
-        if (!nodeIdsByExport[key]) {
-          nodeIdsByExport[key] = { settings, nodes: {} };
-        }
-        nodeIdsByExport[key].nodes[child.id] = child;
+        nodeIdsByExport = addNodeToDownload(child, nodeIdsByExport, setting);
       }
+    }
+
+    // export all SVG-like nodes
+    if (isVectorLike(child)) {
+      const key = getSettingKey(DEFAULT_EXPORT_SETTINGS);
+      nodeIdsByExport = addNodeToDownload(
+        child,
+        nodeIdsByExport,
+        DEFAULT_EXPORT_SETTINGS
+      );
+      nodeIdsByExport[key].nodes[child.id] = child;
     }
   }
 
@@ -409,6 +412,20 @@ const downloadNodeImages = async (
       );
     }
   }
+};
+
+const getSettingKey = (setting) =>
+  setting.format + setting.constraint.type + setting.constraint.value;
+
+const addNodeToDownload = (child, rec, setting: any): any => {
+  const key = getSettingKey(setting);
+
+  if (!rec[key]) {
+    rec[key] = { settings: setting, nodes: {} };
+  }
+  rec[key].nodes[child.id] = child;
+
+  return rec;
 };
 
 const downloadImageRef = (

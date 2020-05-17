@@ -42,12 +42,14 @@ import {
   getOwnerComponent,
   DependencyMap,
   getOwnerInstance,
+  isVectorLike,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
 import * as path from "path";
 import { camelCase } from "lodash";
 import { PaintType } from "figma-api";
+import { DEFAULT_EXPORT_SETTINGS } from "./constants";
 
 export const translateFigmaProjectToPaperclip = (
   file,
@@ -115,10 +117,7 @@ const getNodeSourceDocument = (
   return dep ? dep.document : context.document;
 };
 
-const getSourceComponent = (
-  id: string,
-  context: TranslateContext
-): Component => {
+const getSourceNode = (id: string, context: TranslateContext): Component => {
   return getNodeById(
     getSourceNodeId(id, context),
     getNodeSourceDocument(id, context)
@@ -214,18 +213,17 @@ const translateComponent = (
     return context;
   }
 
-  if (node.type === NodeType.Vector) {
+  if (isVectorLike(node)) {
     context = addBuffer(
-      `<svg export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
+      `<span export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
         context
-      )} {className?}">\n`,
+      )} {className?}" width="${node.size.x}" height="${node.size.y}">\n`,
       context
     );
     context = startBlock(context);
-    // context = addBuffer(``)
     context = endBlock(context);
-    context = addBuffer(`</svg>\n\n`, context);
+    context = addBuffer(`</span>\n\n`, context);
   } else {
     const tagName = node.type === NodeType.Text ? `span` : `div`;
 
@@ -275,7 +273,7 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
 
 const getPreviewComponentName = (nodeId: string, context: TranslateContext) => {
   // note we fetch component since nodeId & id might not match up (nodeId may be imported)
-  const component = getSourceComponent(nodeId, context);
+  const component = getSourceNode(nodeId, context);
   let name =
     "_Preview_" +
     pascalCase(component.name + "_" + cleanupNodeId(component.id));
@@ -386,7 +384,7 @@ const getComponentNestedNode = (
   componentId: string,
   context: TranslateContext
 ) => {
-  const component = getSourceComponent(componentId, context);
+  const component = getSourceNode(componentId, context);
   const nodePath = getNodePath(nestedInstanceNode, instance);
   if (!component) {
     throw new Error(`Cannot find component: ${componentId}`);
@@ -535,7 +533,13 @@ const translateClassNames = (
     context = addBuffer(`${key}: ${info.style[key]};\n`, context);
   }
 
-  // ABS layout should be opt-in since it's non-responsive.
+  if (isVectorLike(info.node)) {
+    context = addBuffer(`width: ${info.style.width};\n`, context);
+    context = addBuffer(`height: ${info.style.height};\n`, context);
+
+    // ABS layout should be opt-in since it's non-responsive.
+  }
+
   if (
     hasLayoutDeclaration &&
     context.compilerOptions.includeAbsoluteLayout !== false
@@ -667,6 +671,17 @@ const getCSSStyle = (
   instance?: Instance
 ) => {
   let style: Record<string, string | number> = {};
+
+  if (isVectorLike(node)) {
+    style.background = `url(./${getNodeExportFileName(
+      node,
+      context.document,
+      DEFAULT_EXPORT_SETTINGS
+    )})`;
+    Object.assign(style, getPositionStyle(node, context));
+    return style;
+  }
+
   if (hasVectorProps(node)) {
     Object.assign(style, getVectorStyle(node, context));
   }
@@ -695,16 +710,6 @@ const getCSSStyle = (
     ) as SolidFill;
     if (solidFill) {
       style.color = getCSSRGBAColor(solidFill.color);
-    }
-  } else if (
-    node.type === NodeType.Ellipse ||
-    node.type === NodeType.REGULAR_POLYGON ||
-    node.type === NodeType.Star ||
-    node.type === NodeType.Vector
-  ) {
-    Object.assign(style, getPositionStyle(node, context));
-    if (!node.exportSettings) {
-      logNodeWarning(node, `should be exported since it's a polygon`);
     }
   } else if (node.type === NodeType.Frame) {
     Object.assign(style, getPositionStyle(node, context));
@@ -766,7 +771,7 @@ const getVectorStyle = (
     ) as SolidFill;
 
     if (containsInvalidStroke) {
-      logNodeWarning(node, `Only one solid fill stroke is suppoered`);
+      logNodeWarning(node, `Only one solid fill stroke is supported`);
     }
 
     if (solidStroke) {

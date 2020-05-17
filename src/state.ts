@@ -97,7 +97,9 @@ export type Rectangle = {
 export type Effect = any;
 export type Vector = { x: number; y: number };
 export type Transform = [number, number, number][];
-export type Path = {};
+export type Path = {
+  path: string;
+};
 export type StyleType = "FILL" | "TEXT" | "EFFECT" | "GRID";
 
 export type Constraint = {
@@ -249,7 +251,7 @@ export type Instance = {
 
 export type Component = {} & FrameProps & BaseNode<NodeType.Component>;
 
-type VectorLikeNode = Frame | VectorNode | RectangleNode;
+export type VectorLikeNode = VectorNode | EllipseNode | StarNode;
 export type Exportable = Frame | VectorNode | RectangleNode;
 export type Parent = Frame | GroupNode | Document | Canvas | Instance;
 export type Node =
@@ -279,6 +281,15 @@ export const hasVectorProps = (node: Node): node is VectorLikeNode => {
 export const isExported = (node: Node): node is Exportable => {
   return node.type !== NodeType.Document && node.exportSettings?.length > 0;
 };
+
+export const isVectorLike = (node: Node): node is VectorLikeNode => {
+  return (
+    node.type === NodeType.Vector ||
+    node.type == NodeType.Star ||
+    node.type == NodeType.Ellipse
+  );
+};
+
 export const readConfigSync = (cwd: string) =>
   JSON.parse(fs.readFileSync(path.join(cwd, CONFIG_FILE_NAME), "utf8"));
 

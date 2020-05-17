@@ -1,3 +1,10 @@
+import { ExportSettings } from "./state";
+
 export const CONFIG_FILE_NAME = "figmark.json";
 export const PC_FILE_EXTENSION = ".pc";
 export const DEPENDENCIES_NAMESPACE = "dependencies";
+export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
+  suffix: "",
+  format: "SVG",
+  constraint: { value: 1, type: "SCALE" },
+};

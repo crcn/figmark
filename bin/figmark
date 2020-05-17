@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-const {Client, cli: {init, sync, build}, CONFIG_FILE_NAME} = require('../');
+const {Client, cli: {init, pull}, CONFIG_FILE_NAME} = require('../');
 const yargs = require('yargs');
 
 yargs
 .scriptName('figmark')
 .usage('$0 <cmd> [args]')
 .command(`init`, 'initialize figmark for this project', () => {},  init)
-.command(`sync [watch]`, 'Sync from Figma', () => {}, sync)
+.command(`pull [watch]`, 'Downloads designs from Figma', () => {}, pull)
 .help()
 .argv
