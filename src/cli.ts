@@ -183,6 +183,15 @@ const downloadFile = async (
     `${formatFileName(file.name, fileNameFormat)}${PC_FILE_EXTENSION}`
   );
 
+  // TODO - need to import deps
+  // for (const id in file.components) {
+  //   const component = file.components[id];
+  //   if (component.key) {
+  //     console.log("LOADING", component);
+  //     const result = await client.getComponent(component.key);
+  //     console.log("LOADED", result);
+  //   }
+  // }
   const pcContent = translateFigmaProjectToPaperclip(file);
 
   if (fs.existsSync(filePath)) {

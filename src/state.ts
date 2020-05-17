@@ -1,7 +1,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { CONFIG_FILE_NAME } from "./constants";
-const memoize = require("fast-memoize");
+// const memoize = require("fast-memoize");
+const memoize = (fn) => fn;
 import { camelCase } from "lodash";
 
 export type FileConfig = {

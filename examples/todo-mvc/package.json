@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build:definitions": "paperclip ./src/**/*.pc --compiler=paperclip-compiler-react --definition --write"
+    "build:definitions": "paperclip './src/**/*.pc' --compiler=paperclip-compiler-react --definition --write"
   },
   "author": "",
   "license": "ISC",

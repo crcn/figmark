@@ -41,7 +41,8 @@ import {
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
-const memoize = require("fast-memoize");
+// const memoize = require("fast-memoize");
+const memoize = (fn) => fn;
 
 export const translateFigmaProjectToPaperclip = (file) => {
   let context = createTranslateContext();
@@ -266,6 +267,9 @@ const getComponentNestedNode = (
 ) => {
   const component = getNodeById(componentId, document);
   const nodePath = getNodePath(nestedInstanceNode, instance);
+  if (!component) {
+    throw new Error(`Cannot find component instance: ${componentId}`);
+  }
   return getNodeByPath(nodePath, component);
 };
 
