@@ -39,6 +39,7 @@ import {
   hasVectorProps,
   VectorNode,
   CompilerOptions,
+  getOwnerComponent,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -99,6 +100,7 @@ const translateComponent = (
   ) {
     return context;
   }
+
 
   const componentName = getNodeComponentName(node, document);
   const withAbsoluteLayoutAttr =
@@ -481,7 +483,8 @@ const getNodeClassName = (node: Node, document: Document) => {
 
 // TODO - need to use compoennt name
 const getNodeComponentName = (node: Node, document: Document) => {
-  return pascalCase(getUniqueNodeName(node, document));
+  const nodeName = getUniqueNodeName(node, document);
+  return pascalCase(nodeName);
 };
 
 export type ComputedNestedStyleInfo = {

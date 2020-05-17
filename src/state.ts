@@ -1,8 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { CONFIG_FILE_NAME } from "./constants";
-// const memoize = require("fast-memoize");
-const memoize = (fn) => fn;
+import {memoize} from "./memo";
 import { camelCase } from "lodash";
 
 export type FileConfig = {
@@ -313,8 +312,15 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
       return 0;
     });
 
+  let prefix = '';
+  const ownerComponent = getOwnerComponent(node, document);
+
+  if (ownerComponent) {
+    prefix = getUniqueNodeName(ownerComponent, document) + "_";
+  }
+
   // don't allow numbers in node names
-  const prefix = !node.name || isNaN(Number(node.name.charAt(0))) ? "" : "_";
+  prefix += !node.name || isNaN(Number(node.name.charAt(0))) ? "" : "_";
 
   // first instance doesn't use postfix
   const postfix =
@@ -353,7 +359,51 @@ const findNodePath = (node: Node, current: any, path: number[] = []) => {
   return null;
 };
 
+export const getOwnerComponent = (node: Node, document: Document) => {
+  if (node.type === NodeType.Component) {
+    return null;
+  }
+  const ancestors = getNodeAncestors(node, document);
+  for (const ancestor of ancestors) {
+    if (ancestor.type === NodeType.Component) {
+      return ancestor;
+    }
+  }
+  return null;
+};
+
 export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "");
+
+export const getNodeAncestors = (node: Node, document: Document): Node[] => {
+  const childParentMap = getChildParentMap(document);
+  const ancestors = [];
+  let current = node;
+  while(true) {
+    current = childParentMap[current.id];
+    if (!current) {
+      break;
+    }
+    ancestors.push(current);
+  }
+
+  return ancestors;
+};
+
+const getChildParentMap = memoize((document: Document) => {
+  const allNodes = flattenNodes(document);
+
+  const childParentMap = {};
+  for (const node of allNodes) {
+    if ((node as any).children) {
+      for (const child of (node as any).children) {
+        childParentMap[child.id] = node;
+      }
+    }
+  }
+
+  return childParentMap;
+});
+
 
 const flattenNodes2 = (node: Node, allNodes: Node[] = []) => {
   allNodes.push(node);
