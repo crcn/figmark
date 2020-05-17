@@ -10,6 +10,9 @@ export const logWarn = (message: string) => {
 export const logInfo = (message: string) => {
   console.warn(chalk.blue(`info`) + " " + message);
 };
+export const logSuccess = (message: string) => {
+  console.warn(chalk.green(`success`) + " " + message);
+};
 
 export const logError = (message: string) => {
   console.warn(chalk.red(`error`) + " " + message);

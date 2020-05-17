@@ -11,6 +11,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as fsa from "fs-extra";
 import * as https from "https";
+import * as chalk from "chalk";
 import { camelCase, kebabCase, snakeCase } from "lodash";
 import {
   Config,
@@ -32,7 +33,7 @@ import {
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import { Document } from "./state";
 import { Version } from "figma-api/lib/api-types";
-import { logInfo, pascalCase, logWarn } from "./utils";
+import { logInfo, logSuccess, pascalCase, logWarn } from "./utils";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -59,7 +60,7 @@ export const init = async () => {
 
   const client = new Figma.Api({ personalAccessToken });
 
-  console.log("Fetching files...");
+  logInfo("Fetching files...");
 
   // const fileVersion = await getFileVes
   const fileVersions = await getFileVersions(
@@ -80,9 +81,10 @@ export const init = async () => {
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
-  console.log(`Created ${CONFIG_FILE_NAME}`);
+  logInfo(`Created ${CONFIG_FILE_NAME}`);
   fsa.mkdirpSync(dest);
-  console.log(`Created ${dest}`);
+  logInfo(`Created ${dest}`);
+  logSuccess(`All done! Go ahead and run ${chalk.bold("figmark pull")}`);
 };
 
 type SyncOptions = {
@@ -187,7 +189,7 @@ export const pull = async ({ watch }: SyncOptions) => {
   if (watch) {
     setTimeout(pull, WATCH_TIMEOUT, { watch });
   } else {
-    logInfo(`Done! 👨🏻‍🎨`);
+    logInfo(`Downloaded all assets 🎨`);
   }
 };
 
