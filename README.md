@@ -183,3 +183,5 @@ If you're using TypeScript, you can generated typed definition files from your d
 ```
 paperclip --definition --write
 ```
+
+☝🏻this will generate `*.pc.d.ts` files for each of your designs.
