@@ -5,6 +5,47 @@ Use Figma designs directly in your web application in a _responsive_ way.
 - [Getting Started](#getting-started)
 - [Examples](./examples)
 
+## Getting started
+
+To get started, you'll need to install the CLI tool - go ahead and run:
+
+```
+npm install figmark -g
+```
+
+`cd` to your project directory, then run:
+
+```
+figmark init
+```
+
+This will prompt you for a few things, starting with your **Figma personal access key**. Here's how you generate one:
+
+![alt figma design](./docs/assets/finding-pat.gif)
+
+Next you'll need to set your **team ID**. Herre's how you find that (it's in the URL):
+
+![alt figma design](./docs/assets/finding-team.gif)
+
+_Finally_ you can fill your Figma designs into your codebase:
+
+```
+figmark pull
+```
+
+> ☝🏻Run this command whenever you want to update your designs locally.
+
+That's it! At this point you should have generated React files that you can use directly in your code.
+
+> You'll also notice `*.pc` files which React files are compiled from. To learn more about how to use PC files, you can check out the [Paperclip](https://github.com/crcn/paperclip) repository.
+
+<!-- ### Do's & Don'ts
+
+- 🔴 Don't store your generated designs in GIT. Treat them like dependencies.
+- 🟢 Specify file versions that you'd like to download in the `fileVersions` config property.
+- 🔴
+-->
+
 ### How does it work?
 
 Here are a few button variations in Figma:
@@ -90,37 +131,3 @@ Here's what the code above looks like when loaded in a browser:
 ![alt figma design](./docs/assets/preview-screenshot.png)
 
 That's all there is to it! 🙌
-
-## Getting started
-
-To get started, you'll need to install the CLI tool - go ahead and run:
-
-```
-npm install figmark -g
-```
-
-After that, `cd` to your project directory, then run:
-
-```
-figmark init
-```
-
-This will prompt you for a few necessary things, starting with your **Figma personal access key**. You'll need to generate a new one -- here's how you do that:
-
-![alt figma design](./docs/assets/finding-pat.gif)
-
-You'll _then_ be asked to set your **team ID**. You'll find it in the URL when you select a Figma team. Here's what I mean:
-
-![alt figma design](./docs/assets/finding-team.gif)
-
-After you're done, you can go ahead and download your design files:
-
-```
-figmark pull
-```
-
-> ☝🏻Run this command whenever you want to update your designs locally.
-
-That's it! At this point you should have generated React files that you can use directly in your code.
-
-> You'll also notice `*.pc` files which React files are compiled from. To learn more about how to use PC files, you can check out the [Paperclip](https://github.com/crcn/paperclip) repository.
