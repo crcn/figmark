@@ -138,3 +138,12 @@ Here's what the code above looks like when loaded in a browser:
 > For documentation on how to use these designs in Webpack, check out the [Paperclip](https://github.com/crcn/paperclip) repository.
 
 That's all there is to it! 🙌
+
+#### Recommendations & Notes
+
+Just a few notes about this library usage:
+
+- You should GIT-ignore generated design files -- treat them like dependencies.
+- Unused layers are dropped from your application bundle if you're using tree-shaking.
+- `*.pc` file documentation can be found in the [Paperclip repository](https://github.com/crcn/paperclip)
+- You can preview `*.pc` files directly using the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=crcn.paperclip-vscode-extension)
