@@ -22,7 +22,6 @@ import {
   classNames,
 } from "./design-generated/test/figmark-2.pc";
 import * as React from "react";
-import * as ReactDOM from "react-dom";
 import * as cx from "classnames";
 import styled from "styled-components";
 
@@ -63,7 +62,7 @@ const EnhancedButton = ({
   </StyledButton>
 );
 
-const App = () => {
+export const ButtonsPreview = () => {
   return (
     <>
       <EnhancedButton>Primary</EnhancedButton>
