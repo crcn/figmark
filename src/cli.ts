@@ -70,7 +70,7 @@ export const init = async () => {
 
   const client = new Figma.Api({ personalAccessToken });
 
-  logInfo("Fetching files...");
+  logInfo("Fetching files versions...");
 
   const fileVersions = await getFileVersions(
     client,
