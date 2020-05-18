@@ -11,104 +11,22 @@ Here are a few button variations in Figma:
 
 ![alt figma design](./docs/assets/screenshot.png)
 
-Using [Figmark's CLI tool](#cli-usage), designs are automatically downloaded & translated into code that looks something like this:
-
-```html
-<!-- STYLES -->
-
-<style>
-  :global(._5710_buttonPrimary) {
-    & :global(._579_ButtonPrimary_Background) {
-      background: #d0d0d0;
-      border-radius: 30px;
-    }
-    & :global(._5711_ButtonPrimary_Label) {
-      mix-blend-mode: multiply;
-      display: flex;
-      align-items: center;
-      font-family: Roboto;
-      font-weight: 400;
-      font-size: 10px;
-      letter-spacing: 0.24em;
-      text-align: center;
-      font-featutes-settings: "onum" on, "tnum" on;
-      color: #716f6f;
-    }
-  }
-
-  :global(._578_buttons) {
-    background: #ffffff;
-    overflow: hidden;
-  }
-  :global(._5720_buttonDisabled) {
-    opacity: 0.6000000238418579;
-  }
-
-  :global(._5723_buttonSecondary) {
-    & :global(._579_ButtonPrimary_Background) {
-      background: unset;
-      border: 1px solid #d0d0d0;
-    }
-  }
-</style>
-
-<!-- ALL LAYERS & COMPONENTS -->
-
-<div
-  export
-  component
-  as="Buttons"
-  data-with-absolute-layout="{withAbsoluteLayout?}"
-  className="_578_buttons {className?}"
->
-  {children}
-</div>
-
-<div
-  export
-  component
-  as="ButtonPrimary"
-  data-with-absolute-layout="{withAbsoluteLayout?}"
-  className="_5710_buttonPrimary {className?}"
->
-  {children}
-</div>
-
-<div
-  export
-  component
-  as="ButtonPrimary_Background"
-  data-with-absolute-layout="{withAbsoluteLayout?}"
-  className="_579_ButtonPrimary_Background {className?}"
->
-  {children}
-</div>
-
-<span
-  export
-  component
-  as="ButtonPrimary_Label"
-  data-with-absolute-layout="{withAbsoluteLayout?}"
-  className="_5711_ButtonPrimary_Label {className?}"
->
-  {children}
-</span>
-```
-
-From here, we can use [Paperclip](https://github.com/crcn/paperclip) to load these templates into our application code. Here's an example of how we can do that in React:
+Using [Figmark's CLI tool](#cli-usage), we can download our designs and use them directly in our application code like this:
 
 ```jsx
-import * as React from "react";
-import * as ReactDOM from "react-dom";
-import * as cx from "classnames";
+// Designes imported from Figma
 import {
   ButtonPrimary,
   ButtonPrimary_Label3,
   ButtonPrimary_Background3,
   classNames,
 } from "./design-generated/test/figmark-2.pc";
+import * as React from "react";
+import * as ReactDOM from "react-dom";
+import * as cx from "classnames";
 import styled from "styled-components";
 
+// We can easily add responsiveness to our designs like this
 const StyledButton = styled(ButtonPrimary)`
   cursor: pointer;
   display: block;
@@ -159,11 +77,11 @@ const App = () => {
 };
 ```
 
-Here's what the code above looks like when loaded in a browser.
+Here's what the code above looks like when loaded in a browser:
 
 ![alt figma design](./docs/assets/preview-screenshot.png)
 
-That's all there is to it! 🎉
+That's all there is to it! 🙌
 
 ## Getting started
 
@@ -197,16 +115,20 @@ figmark pull
 
 > ☝🏻Run this command whenever you want to update your designs locally.
 
-You _should_ see new files with a `.pc` extension -- these are where your designs live. If you wan to preview them, you can do that by using the [Paperclip VS Code extension](https://marketplace.visualstudio.com/items?itemName=crcn.paperclip-vscode-extension).
+You _should_ see new files with a `.pc` extension -- these are where your designs are saved to. If you wan to preview them directly, you can do that by using the [Paperclip VS Code extension](https://marketplace.visualstudio.com/items?itemName=crcn.paperclip-vscode-extension).
 
 #### Loading design files (.pc) in code
 
-`*.pc` files compile to code, so you can include them directly in your application. Right _now_ React is the only supported target, but more are planned in the future.
-
-To get started using `*.pc` files with React + [Webpack](https://webpack.js.org/), install these dependencies:
+`*.pc` can be included into React code (more targets are planned). To get started with that, install these dependencies:
 
 ```
-npm install paperclip-loader paperclip-cli paperclip-compiler-react webpack file-loader css-loader style-loader --save-dev
+npm install paperclip paperclip-loader paperclip-cli paperclip-compiler-react --save-dev
+```
+
+Also be sure to install these dependencies if you don't already have them:
+
+```
+npm install webpack file-loader css-loader style-loader --save-dev
 ```
 
 Next, copy the following text to `pcconfig.json`:
@@ -222,7 +144,9 @@ Next, copy the following text to `pcconfig.json`:
 }
 ```
 
-From there, here's a Webpack template you can use:
+> This tells Paperclip how to compile your `*.pc` files
+
+From there, you need to configure Webpack. Here's something you can use:
 
 ```javascript
 const path = require("path");
@@ -266,7 +190,7 @@ module.exports = {
 };
 ```
 
-That's it! From there you can start importing `*.pc` files directly.
+After setting that up, you can go ahead and start using `*.pc` files in your React code!
 
 ### Generating strongly typed templates
 
