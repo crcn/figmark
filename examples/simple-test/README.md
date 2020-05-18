@@ -8,7 +8,7 @@ Next, go ahead and run this:
 
 ```
 npm install
-npm run design:pull
+npm run update:design
 npm run build
 ```
 

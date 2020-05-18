@@ -1,45 +1,60 @@
 import * as React from "react";
 import * as ReactDOM from "react-dom";
+import * as cx from "classnames";
 import {
-  Button,
-  Button_Background,
-  Button_Label,
-  Button_Star1,
+  ButtonPrimary,
+  ButtonPrimary_Label3,
+  ButtonPrimary_Background3,
   classNames,
 } from "./design-generated/test/figmark-2.pc";
 import styled from "styled-components";
 
-const StyledBackground = styled(Button_Background)`
+const StyledButton = styled(ButtonPrimary)`
+  cursor: pointer;
   display: block;
   display: flex;
-  padding: 20px;
-`;
-
-const StyledStar = styled(Button_Star1)`
-  display: inline-block;
-  margin-right: 10px;
-`;
-
-const StyledLabel = styled(Button_Label)`
-  font-family: Helvetica;
-`;
-
-const StyledButton = styled(Button)`
-  padding: 0px;
-  flex-direction: column;
-  .${classNames.button_label} {
+  .${classNames.buttonPrimary_background3} {
+    padding: 8px 10px;
+  }
+  .${classNames.buttonPrimary_label3} {
     font-family: Helvetica;
   }
 `;
 
+type EnhancedButtonProps = {
+  disabled?: boolean;
+  primary?: boolean;
+  secondary?: boolean;
+  children?: React.ReactNode;
+};
+
+const EnhancedButton = ({
+  disabled,
+  secondary,
+  children,
+}: EnhancedButtonProps) => (
+  <StyledButton
+    className={cx({
+      [classNames.buttonDisabled]: disabled,
+      [classNames.buttonSecondary]: secondary,
+    })}
+  >
+    <ButtonPrimary_Background3>
+      <ButtonPrimary_Label3>{children}</ButtonPrimary_Label3>
+    </ButtonPrimary_Background3>
+  </StyledButton>
+);
+
 const App = () => {
   return (
-    <StyledButton>
-      <StyledBackground>
-        <StyledStar />
-        <StyledLabel>Label</StyledLabel>
-      </StyledBackground>
-    </StyledButton>
+    <>
+      <EnhancedButton>Primary</EnhancedButton>
+      <EnhancedButton secondary>Secondary</EnhancedButton>
+      <EnhancedButton disabled>Disabled</EnhancedButton>
+      <EnhancedButton disabled secondary>
+        Disabled Secondary
+      </EnhancedButton>
+    </>
   );
 };
 

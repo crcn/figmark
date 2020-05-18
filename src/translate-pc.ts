@@ -252,7 +252,7 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
   const canvas = document.children[0];
 
   if (!hasChildren(canvas)) {
-    return;
+    return context;
   }
 
   const allComponents = getAllComponents(document);
@@ -988,6 +988,10 @@ const TEXT_ALIGN_VERTICAL_MAP = {
 const getTextStyle = (node: Text) => {
   const style = node.style;
   const newStyle: any = {};
+
+  if (node.blendMode && BLEND_MODE_MAP[node.blendMode]) {
+    newStyle["mix-blend-mode"] = BLEND_MODE_MAP[node.blendMode];
+  }
 
   if (style.textAlignVertical !== "TOP") {
     newStyle.display = "flex";
