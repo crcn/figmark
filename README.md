@@ -1,12 +1,17 @@
-Figmark is a tool that allows you to use Figma designs in your single page application.
+Figmark is a fully transparent tool that allows you to use Figma designs in your web application in a responsive way.
 
-### Example
+### Resources
+
+- [Getting Started](#getting-started)
+- [Examples](./examples)
+
+### How does it work?
 
 Here are a few button variations in Figma:
 
 ![alt figma design](./docs/assets/screenshot.png)
 
-Using [Figmark's CLI tool](#cli-usage), we can convert to code which looks something like this:
+Using [Figmark's CLI tool](#cli-usage), designs are automatically downloaded & translated into code that looks something like this:
 
 ```html
 <!-- STYLES -->
@@ -90,13 +95,16 @@ Using [Figmark's CLI tool](#cli-usage), we can convert to code which looks somet
 </span>
 ```
 
-Then by using [Paperclip](https://github.com/crcn/paperclip), we can include the designs directly into our React code and add additional styles for responsiveness:
+From here, we can use [Paperclip](https://github.com/crcn/paperclip) to load these templates into our application code. Here's an example of how we can do that in React:
 
 ```jsx
+import * as React from "react";
+import * as ReactDOM from "react-dom";
+import * as cx from "classnames";
 import {
   ButtonPrimary,
-  ButtonPrimary_Label,
-  ButtonPrimary_Background,
+  ButtonPrimary_Label3,
+  ButtonPrimary_Background3,
   classNames,
 } from "./design-generated/test/figmark-2.pc";
 import styled from "styled-components";
@@ -105,39 +113,86 @@ const StyledButton = styled(ButtonPrimary)`
   cursor: pointer;
   display: block;
   display: flex;
-  .${classNames.buttonPrimary_background} {
+  .${classNames.buttonPrimary_background3} {
     padding: 8px 10px;
   }
-  .${classNames.buttonPrimary_label} {
+  .${classNames.buttonPrimary_label3} {
     font-family: Helvetica;
   }
 `;
 
-const Demo = () => {
+type EnhancedButtonProps = {
+  disabled?: boolean,
+  primary?: boolean,
+  secondary?: boolean,
+  children?: React.ReactNode,
+};
+
+const EnhancedButton = ({
+  disabled,
+  secondary,
+  children,
+}: EnhancedButtonProps) => (
+  <StyledButton
+    className={cx({
+      [classNames.buttonDisabled]: disabled,
+      [classNames.buttonSecondary]: secondary,
+    })}
+  >
+    <ButtonPrimary_Background3>
+      <ButtonPrimary_Label3>{children}</ButtonPrimary_Label3>
+    </ButtonPrimary_Background3>
+  </StyledButton>
+);
+
+const App = () => {
   return (
     <>
-      <StyledButton>
-        <ButtonPrimary_Background>
-          <ButtonPrimary_Label>Label</ButtonPrimary_Label>
-        </ButtonPrimary_Background>
-      </StyledButton>
-      <StyledButton className={classNames.buttonDisabled}>
-        <ButtonPrimary_Background>
-          <ButtonPrimary_Label>Label</ButtonPrimary_Label>
-        </ButtonPrimary_Background>
-      </StyledButton>
-      <StyledButton className={classNames.buttonSecondary}>
-        <ButtonPrimary_Background>
-          <ButtonPrimary_Label>Label</ButtonPrimary_Label>
-        </ButtonPrimary_Background>
-      </StyledButton>
+      <EnhancedButton>Primary</EnhancedButton>
+      <EnhancedButton secondary>Secondary</EnhancedButton>
+      <EnhancedButton disabled>Disabled</EnhancedButton>
+      <EnhancedButton disabled secondary>
+        Disabled Secondary
+      </EnhancedButton>
     </>
   );
 };
 ```
 
-Here's the result:
+Here's what the code above looks like when loaded in a browser.
 
 ![alt figma design](./docs/assets/preview-screenshot.png)
 
-### CLI usage
+That's all there is to it! 🎉
+
+## Getting started
+
+To get started, you'll need to install the CLI tool - go ahead and run:
+
+```
+npm install figmark -g
+```
+
+After that, `cd` to your project directory, then run:
+
+```
+figmark init
+```
+
+This will prompt you for a few necessary things, starting with your **Figma personal access key**. You'll need to generate a new one -- here's how you do that:
+
+![alt figma design](./docs/assets/finding-pat.gif)
+
+You'll _then_ be asked to set your **team ID**. You'll find it in the URL when you select a Figma team. Here's what I mean:
+
+![alt figma design](./docs/assets/finding-team.gif)
+
+You'll need to answer a few more questions, then you should be good to go!
+
+Next up, go ahead and download your design files:
+
+```
+figmark pull
+```
+
+That's it! Now you can start using your designs in code. Check out the [examples](./examples) on how to do that.
