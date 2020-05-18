@@ -1,4 +1,4 @@
-Figmark is a fully transparent tool that allows you to use Figma designs in your web application in a responsive way.
+Figmark allows you to use Figma designs in your web application in a responsive way.
 
 ### Resources
 
