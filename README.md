@@ -1,4 +1,4 @@
-Use Figma designs directly in your web application in a _responsive_ way.
+Figmark allows you to use Figma designs in React code.
 
 ### Resources
 
