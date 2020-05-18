@@ -4,6 +4,7 @@ import {
   PC_FILE_EXTENSION,
   DEPENDENCIES_NAMESPACE,
   DEFAULT_EXPORT_SETTINGS,
+  PC_CONFIG_FILE_NAME,
 } from "./constants";
 import * as Figma from "figma-api";
 import * as inquirer from "inquirer";
@@ -69,6 +70,14 @@ export const init = async () => {
     () => LATEST_VERSION_NAME
   );
 
+  const pcConfig = {
+    compilerOptions: {
+      // TODO - this eventuall be a list
+      name: "paperclip-compiler-react",
+    },
+    filesGlob: "./" + path.join(dest, "**/*.pc"),
+  };
+
   const config: Config = {
     dest,
     fileNameFormat: FileNameFormat.KebabCase,
@@ -82,6 +91,11 @@ export const init = async () => {
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
   logInfo(`Created ${CONFIG_FILE_NAME}`);
+  fs.writeFileSync(
+    path.join(cwd, PC_CONFIG_FILE_NAME),
+    JSON.stringify(pcConfig, null, 2)
+  );
+  logInfo(`Created ${PC_CONFIG_FILE_NAME}`);
   fsa.mkdirpSync(dest);
   logInfo(`Created ${dest}`);
   logSuccess(`All done! Go ahead and run ${chalk.bold("figmark pull")}`);

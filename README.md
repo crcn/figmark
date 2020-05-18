@@ -124,28 +124,13 @@ You _should_ see new files with a `.pc` extension -- these are where your design
 npm install paperclip paperclip-loader paperclip-cli paperclip-compiler-react --save-dev
 ```
 
-Also be sure to install these dependencies if you don't already have them:
+Also be sure to install these dependencies if you don't have them already:
 
 ```
 npm install webpack file-loader css-loader style-loader --save-dev
 ```
 
-Next, copy the following text to `pcconfig.json`:
-
-```javascript
-{
-  "compilerOptions": {
-    "name": "paperclip-compiler-react"
-  },
-
-  // path to your PC files
-  "filesGlob": "./src/**/*.pc"
-}
-```
-
-> This tells Paperclip how to compile your `*.pc` files
-
-From there, you need to configure Webpack. Here's something you can use:
+Next, you need to configure Webpack. Here's something you can use:
 
 ```javascript
 const path = require("path");
@@ -196,13 +181,5 @@ After setting that up, you can go ahead and start using `*.pc` files in your Rea
 If you're using TypeScript, you can generated typed definition files from your designs. Assuming that you have the required paperclip dependencies installed (`npm install paperclip paperclip-cli paperclip-compiler-react`), go ahead and run:
 
 ```
-paperclip "./src/**/*.pc" --definition --write --compiler=paperclip-compiler-react
-```
-
-If you have a `pcconfig.json` defined (see example config above), you can simply run:
-
-```
 paperclip --definition --write
 ```
-
-☝🏻Both of these commands will generate strongly typed `*.pc.d.ts` files that will make it easier (and safer) to use downloaded design files.
