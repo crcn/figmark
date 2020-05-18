@@ -1,8 +1,8 @@
 {
   "dest": "./src/design-generated",
   "fileNameFormat": "kebab-case",
-  "personalAccessToken": "45114-26124870-5544-4dd9-9ef3-37ff39d31adf",
-  "teamId": "842804427190189344",
+  "personalAccessToken": "[PERSONAL ACCESS TOKEN HERE]",
+  "teamId": "[YOUR TEAM ID HERE]",
   "fileVersions": {
     "IDQOcOXCvIciragkiHWH7c": "latest",
     "YPkzgSZJUglJMc6sNN0Lo8": "latest"

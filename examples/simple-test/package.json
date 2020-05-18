@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "design:pull": "figmark pull",
     "build": "npm run build:definitions && npm run build:webpack",
     "build:webpack": "webpack",
     "build:definitions": "paperclip --definition --write"
