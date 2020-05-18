@@ -215,7 +215,7 @@ const translateComponent = (
 
   if (isVectorLike(node)) {
     context = addBuffer(
-      `<span export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
+      `<div export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
         node,
         context
       )} {className?}" width="${node.size.x}" height="${node.size.y}">\n`,
@@ -223,7 +223,7 @@ const translateComponent = (
     );
     context = startBlock(context);
     context = endBlock(context);
-    context = addBuffer(`</span>\n\n`, context);
+    context = addBuffer(`</div>\n\n`, context);
   } else {
     const tagName = node.type === NodeType.Text ? `span` : `div`;
 
@@ -555,6 +555,15 @@ const translateClassNames = (
     context = addBuffer(`}\n`, context);
   }
 
+  const isComponentInstance =
+    targetNode.type === NodeType.Instance ||
+    targetNode.type === NodeType.Component;
+
+  if (!isComponentInstance) {
+    context = endBlock(context);
+    context = addBuffer(`}\n`, context);
+  }
+
   context = info.children.reduce((context, child) => {
     if (child.node.type === NodeType.Component && skipComponents) {
       return context;
@@ -563,13 +572,17 @@ const translateClassNames = (
       child,
       document,
       context,
-      true,
+      isComponentInstance,
       skipComponents,
       info.node.type == NodeType.Instance ? info.node : null
     );
   }, context);
-  context = endBlock(context);
-  context = addBuffer(`}\n`, context);
+
+  if (isComponentInstance) {
+    context = endBlock(context);
+    context = addBuffer(`}\n`, context);
+  }
+
   if (!isNested) {
     context = addBuffer(`\n`, context);
   }
