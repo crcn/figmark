@@ -189,10 +189,97 @@ You'll _then_ be asked to set your **team ID**. You'll find it in the URL when y
 
 You'll need to answer a few more questions, then you should be good to go!
 
-Next up, go ahead and download your design files:
+Once you're all setup and your `figmark.json` config file is generated, you can go ahead and download your design files:
 
 ```
 figmark pull
 ```
 
-That's it! Now you can start using your designs in code. Check out the [examples](./examples) on how to do that.
+> ☝🏻Run this command whenever you want to update your designs locally.
+
+You _should_ see new files with a `.pc` extension -- these are where your designs live. If you wan to preview them, you can do that by using the [Paperclip VS Code extension](https://marketplace.visualstudio.com/items?itemName=crcn.paperclip-vscode-extension).
+
+#### Loading design files (.pc) in code
+
+`*.pc` files compile to code, so you can include them directly in your application. Right _now_ React is the only supported target, but more are planned in the future.
+
+To get started using `*.pc` files with React + [Webpack](https://webpack.js.org/), install these dependencies:
+
+```
+npm install paperclip-loader paperclip-cli paperclip-compiler-react webpack file-loader css-loader style-loader --save-dev
+```
+
+Next, copy the following text to `pcconfig.json`:
+
+```javascript
+{
+  "compilerOptions": {
+    "name": "paperclip-compiler-react"
+  },
+
+  // path to your PC files
+  "filesGlob": "./src/**/*.pc"
+}
+```
+
+From there, here's a Webpack template you can use:
+
+```javascript
+const path = require("path");
+
+module.exports = {
+  entry: "./src/index.tsx",
+
+  output: {
+    filename: "[name].js",
+    path: path.resolve(__dirname, "dist"),
+  },
+  module: {
+    rules: [
+      {
+        test: /\.pc$/,
+        loader: "paperclip-loader",
+        include: [path.resolve(__dirname, "src")],
+        exclude: [/node_modules/],
+        options: {
+          config: require("./pcconfig.json"),
+        },
+      },
+      {
+        test: /\.css$/,
+        use: ["style-loader", "css-loader"],
+      },
+      {
+        test: /\.(png|jpe?g|gif|svg)$/i,
+        use: [
+          {
+            loader: "file-loader",
+          },
+        ],
+      },
+    ],
+  },
+
+  resolve: {
+    extensions: [".js", ".jsx"],
+  },
+};
+```
+
+That's it! From there you can start importing `*.pc` files directly.
+
+### Generating strongly typed templates
+
+If you're using TypeScript, you can generated typed definition files. Assuming that you have the required paperclip dependencies installed (`npm install paperclip paperclip-cli paperclip-compiler-react`), go ahead and run:
+
+```
+paperclip "./src/**/*.pc" --definition --write --compiler=paperclip-compiler-react
+```
+
+If you have a `pcconfig.json` defined (see example config above), you can simply run:
+
+```
+paperclip --definition --write
+```
+
+☝🏻Both of these commands will generate strongly typed `*.pc.d.ts` files that you can use in your app code.
