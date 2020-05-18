@@ -1,0 +1,11 @@
+{
+  "dest": "./src/design-generated",
+  "fileNameFormat": "kebab-case",
+  "personalAccessToken": "45720-920077e0-66ea-4bd7-93f8-79cffec2e404",
+  "teamId": "842804427190189344",
+  "fileVersions": {},
+  "compilerOptions": {
+    "includeAbsoluteLayout": true
+  },
+  "compileOnPull": true
+}

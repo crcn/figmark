@@ -5,6 +5,7 @@ import {
   DEPENDENCIES_NAMESPACE,
   DEFAULT_EXPORT_SETTINGS,
   PC_CONFIG_FILE_NAME,
+  DEFAULT_COMPILER_TARGET_NAME,
 } from "./constants";
 import * as Figma from "figma-api";
 import * as inquirer from "inquirer";
@@ -31,10 +32,18 @@ import {
   Dependency,
   isVectorLike,
 } from "./state";
-import { translateFigmaProjectToPaperclip } from "./translate-pc";
+import { spawn } from "child_process";
 import { Document } from "./state";
 import { Version } from "figma-api/lib/api-types";
-import { logInfo, logSuccess, pascalCase, logWarn } from "./utils";
+import { translateFigmaProjectToPaperclip } from "./translate-pc";
+import {
+  logInfo,
+  logSuccess,
+  pascalCase,
+  logWarn,
+  exec,
+  installDependencies,
+} from "./utils";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -63,7 +72,6 @@ export const init = async () => {
 
   logInfo("Fetching files...");
 
-  // const fileVersion = await getFileVes
   const fileVersions = await getFileVersions(
     client,
     teamId,
@@ -90,12 +98,33 @@ export const init = async () => {
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
-  logInfo(`Created ${CONFIG_FILE_NAME}`);
+  logInfo(
+    `Created ${CONFIG_FILE_NAME} - ${chalk.gray(
+      "this is there your config lives"
+    )}`
+  );
+
+  if (!fs.existsSync(path.join(cwd, "package.json"))) {
+    await exec("npm", ["init", "--fl"], cwd, false);
+    logInfo(
+      `Created package.json - ${chalk.gray("this is for Figmark dependencies")}`
+    );
+  }
+
+  // TODO - may want to incude version numbers here
+  await installDependencies(
+    [DEFAULT_COMPILER_TARGET_NAME, "paperclip", "paperclip-cli"],
+    cwd,
+    true
+  );
+
   fs.writeFileSync(
     path.join(cwd, PC_CONFIG_FILE_NAME),
     JSON.stringify(pcConfig, null, 2)
   );
-  logInfo(`Created ${PC_CONFIG_FILE_NAME}`);
+  logInfo(
+    `Created ${PC_CONFIG_FILE_NAME} - ${chalk.gray("compile target config")}`
+  );
   fsa.mkdirpSync(dest);
   logInfo(`Created ${dest}`);
   logSuccess(`All done! Go ahead and run ${chalk.bold("figmark pull")}`);
@@ -162,6 +191,7 @@ export const pull = async ({ watch }: SyncOptions) => {
 
   logInfo(`Loading team designs from Figma`);
 
+  const config: Config = readConfigSync(process.cwd());
   const {
     personalAccessToken,
     dest,
@@ -169,7 +199,7 @@ export const pull = async ({ watch }: SyncOptions) => {
     fileVersions,
     fileNameFormat,
     compilerOptions,
-  }: Config = readConfigSync(process.cwd());
+  } = config;
 
   const syncDir = path.join(cwd, dest);
 
@@ -195,7 +225,8 @@ export const pull = async ({ watch }: SyncOptions) => {
         compilerOptions,
         project,
         projects,
-        syncDir
+        syncDir,
+        config
       );
     }
   }
@@ -241,19 +272,20 @@ const downloadProjectFile = async (
   compilerOptions: CompilerOptions,
   project: Project,
   projects: Project[],
-  dest: string
+  dest: string,
+  config: Config
 ) => {
   const file = await client.getFile(fileKey, {
     geometry: "paths",
     version: version === LATEST_VERSION_NAME ? undefined : version,
   });
-  const filePath = getFileKeySourcePath(
+  const pcFilePath = getFileKeySourcePath(
     fileKey,
     dest,
     fileNameFormat,
     projects
   );
-  const fileDir = path.dirname(filePath);
+  const fileDir = path.dirname(pcFilePath);
   fsa.mkdirpSync(fileDir);
 
   const importedDocuments = await getImportedDocuments(
@@ -267,22 +299,47 @@ const downloadProjectFile = async (
 
   const pcContent = translateFigmaProjectToPaperclip(
     file,
-    filePath,
+    pcFilePath,
     compilerOptions,
     importedDocuments
   );
 
-  if (fs.existsSync(filePath)) {
-    const existingFileContent = fs.readFileSync(filePath, "utf8");
+  if (fs.existsSync(pcFilePath)) {
+    const existingFileContent = fs.readFileSync(pcFilePath, "utf8");
 
     if (existingFileContent === pcContent) {
       return;
     }
   }
 
-  fs.writeFileSync(filePath, pcContent);
+  fs.writeFileSync(pcFilePath, pcContent);
   await downloadImages(client, fileKey, fileDir);
   await downloadNodeImages(client, fileKey, file.document as Document, fileDir);
+
+  // Compiling for convenience so that users can start including
+  // designs immediately
+  if (config.compileOnPull) {
+    await compilePC(pcFilePath);
+  }
+};
+
+const compilePC = async (filePath: string) => {
+  logInfo(`Compiling ${path.relative(cwd, filePath)}`);
+
+  // Note that since we're compiling to JS directly, we need to drop the *.pc extension
+  // so that the file can be loaded into NodeJS. (*.pc.js doesn't work since require("./*.pc") loads the *.pc file instead)
+  await exec(
+    `./node_modules/.bin/paperclip`,
+    [filePath, "--drop-pc-extension", "--write"],
+    cwd,
+    false
+  );
+  await exec(
+    `./node_modules/.bin/paperclip`,
+    [filePath, "--drop-pc-extension", "--definition", "--write"],
+    cwd,
+    false
+  );
 };
 
 const downloadImages = async (
