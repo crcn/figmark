@@ -130,4 +130,6 @@ Here's what the code above looks like when loaded in a browser:
 
 ![alt figma design](./docs/assets/preview-screenshot.png)
 
+> For documentation on how to use these designs in Webpack, check out the [Paperclip](https://github.com/crcn/paperclip) repository.
+
 That's all there is to it! 🙌
