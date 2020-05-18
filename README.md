@@ -106,7 +106,7 @@ You'll _then_ be asked to set your **team ID**. You'll find it in the URL when y
 
 You'll need to answer a few more questions, then you should be good to go!
 
-Once you're all setup and your `figmark.json` config file is generated, you can go ahead and download your design files:
+After you're done, you can go ahead and download your design files:
 
 ```
 figmark pull
