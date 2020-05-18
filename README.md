@@ -27,7 +27,7 @@ Next you'll need to set your **team ID**. Herre's how you find that (it's in the
 
 ![alt figma design](./docs/assets/finding-team.gif)
 
-_Finally_ you can fill your Figma designs into your codebase:
+_Finally_ you can download your Figma designs:
 
 ```
 figmark pull
@@ -35,9 +35,9 @@ figmark pull
 
 > ☝🏻Run this command whenever you want to update your designs locally.
 
-That's it! At this point you should have generated React files that you can use directly in your code.
-
 > You'll also notice `*.pc` files which React files are compiled from. To learn more about how to use PC files, you can check out the [Paperclip](https://github.com/crcn/paperclip) repository.
+
+That's it! At this point you should have generated React files that you can import directly in your code.
 
 <!-- ### Do's & Don'ts
 
@@ -46,13 +46,13 @@ That's it! At this point you should have generated React files that you can use 
 - 🔴
 -->
 
-### How does it work?
+### React example
 
-Here are a few button variations in Figma:
+Here's a quick demo of how designs are used in code. Starting of with a few button variations:
 
 ![alt figma design](./docs/assets/screenshot.png)
 
-Using [Figmark's CLI tool](#getting-started), you can download the Figma design above and use it directly in code:
+After pulling these designs using `figmark pull`, we can import them like so:
 
 ```tsx
 // These are the designs imported from Figma. Each layer is exported as an individual component that corresponds with the layer name. This "slicing up" allows us to add responsive CSS styles to each individual layer.
