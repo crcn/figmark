@@ -11,7 +11,7 @@ Here are a few button variations in Figma:
 
 ![alt figma design](./docs/assets/screenshot.png)
 
-Using [Figmark's CLI tool](#cli-usage), we can download our designs and use them directly in our application code like this:
+Using [Figmark's CLI tool](#getting-started), we can download our designs and use them directly in our application code like this:
 
 ```jsx
 // Designes imported from Figma
