@@ -48,7 +48,7 @@ That's it! At this point you should have generated React files that you can impo
 
 ### React example
 
-Here's a quick demo of how designs are used in code. Starting of with a few button variations:
+Here's a quick demo of how designs are used in code. Starting off with a few button variations:
 
 ![alt figma design](./docs/assets/screenshot.png)
 
