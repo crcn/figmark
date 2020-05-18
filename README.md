@@ -97,7 +97,7 @@ Using [Figmark's CLI tool](#cli-usage), designs are automatically downloaded & t
 
 From here, we can use [Paperclip](https://github.com/crcn/paperclip) to load these templates into our application code. Here's an example of how we can do that in React:
 
-```jsx
+```typescript
 import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as cx from "classnames";
