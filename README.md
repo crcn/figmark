@@ -55,7 +55,10 @@ Here's a quick demo of how designs are used in code. Starting off with a few but
 After pulling these designs using `figmark pull`, we can import them like so:
 
 ```tsx
-// These are the designs imported from Figma. Each layer is exported as an individual component that corresponds with the layer name. This "slicing up" allows us to add responsive CSS styles to each individual layer.
+/*
+  These are the designs imported from Figma. Each layer is exported as an individual component that corresponds with the layer name. This "slicing up" allows us to add responsive CSS styles to each individual layer.
+*/
+
 import {
   // This is the main button
   ButtonPrimary,
