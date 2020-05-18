@@ -193,7 +193,7 @@ After setting that up, you can go ahead and start using `*.pc` files in your Rea
 
 ### Generating strongly typed templates
 
-If you're using TypeScript, you can generated typed definition files. Assuming that you have the required paperclip dependencies installed (`npm install paperclip paperclip-cli paperclip-compiler-react`), go ahead and run:
+If you're using TypeScript, you can generated typed definition files from your designs. Assuming that you have the required paperclip dependencies installed (`npm install paperclip paperclip-cli paperclip-compiler-react`), go ahead and run:
 
 ```
 paperclip "./src/**/*.pc" --definition --write --compiler=paperclip-compiler-react
@@ -205,4 +205,4 @@ If you have a `pcconfig.json` defined (see example config above), you can simply
 paperclip --definition --write
 ```
 
-☝🏻Both of these commands will generate strongly typed `*.pc.d.ts` files that you can use in your app code.
+☝🏻Both of these commands will generate strongly typed `*.pc.d.ts` files that will make it easier (and safer) to use downloaded design files.
