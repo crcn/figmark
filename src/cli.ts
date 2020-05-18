@@ -84,6 +84,7 @@ export const init = async () => {
       name: "paperclip-compiler-react",
     },
     filesGlob: "./" + path.join(dest, "**/*.pc"),
+    dropPcExtension: true,
   };
 
   const config: Config = {
@@ -95,6 +96,7 @@ export const init = async () => {
     compilerOptions: {
       includeAbsoluteLayout: true,
     },
+    compileOnPull: true,
   };
 
   fs.writeFileSync(configFilePath, JSON.stringify(config, null, 2));
@@ -330,13 +332,13 @@ const compilePC = async (filePath: string) => {
   // so that the file can be loaded into NodeJS. (*.pc.js doesn't work since require("./*.pc") loads the *.pc file instead)
   await exec(
     `./node_modules/.bin/paperclip`,
-    [filePath, "--drop-pc-extension", "--write"],
+    [filePath, "--write"],
     cwd,
     false
   );
   await exec(
     `./node_modules/.bin/paperclip`,
-    [filePath, "--drop-pc-extension", "--definition", "--write"],
+    [filePath, "--definition", "--write"],
     cwd,
     false
   );
