@@ -1,4 +1,4 @@
-Figmark allows you to use Figma designs in React code.
+Figmark allows you to import Figma designs in React code.
 
 ### Resources
 
