@@ -1,4 +1,4 @@
-Figmark allows you to use Figma designs in your web application in a responsive way.
+Use Figma designs directly in your web application in a _responsive_ way.
 
 ### Resources
 
@@ -11,22 +11,31 @@ Here are a few button variations in Figma:
 
 ![alt figma design](./docs/assets/screenshot.png)
 
-Using [Figmark's CLI tool](#getting-started), we can download our designs and use them directly in our application code like this:
+Using [Figmark's CLI tool](#getting-started), you can download the Figma design above and use it directly in code:
 
-```jsx
-// Designes imported from Figma
+```tsx
+// These are the designs imported from Figma. Each layer is exported as an individual component that corresponds with the layer name. This "slicing up" allows us to add responsive CSS styles to each individual layer.
 import {
+  // This is the main button
   ButtonPrimary,
+
+  // This is a child of ButtonPrimary -- we know that
+  // because ButtonPrimary_ is the prefix.
   ButtonPrimary_Label3,
+
+  // Another child of ButtonPrimary
   ButtonPrimary_Background3,
+
+  // All classnames that correspond with each layer
   classNames,
-} from "./design-generated/test/figmark-2.pc";
+} from "./design-generated/test/figmark-2";
+
 import * as React from "react";
 import * as cx from "classnames";
 import styled from "styled-components";
 
-// We can easily add responsiveness to our designs like this
-const StyledButton = styled(ButtonPrimary)`
+// We can easily add responsiveness to our designs like so
+const ResponsiveButton = styled(ButtonPrimary)`
   cursor: pointer;
   display: block;
   display: flex;
@@ -39,10 +48,10 @@ const StyledButton = styled(ButtonPrimary)`
 `;
 
 type EnhancedButtonProps = {
-  disabled?: boolean,
-  primary?: boolean,
-  secondary?: boolean,
-  children?: React.ReactNode,
+  disabled?: boolean;
+  primary?: boolean;
+  secondary?: boolean;
+  children?: React.ReactNode;
 };
 
 const EnhancedButton = ({
@@ -50,7 +59,7 @@ const EnhancedButton = ({
   secondary,
   children,
 }: EnhancedButtonProps) => (
-  <StyledButton
+  <ResponsiveButton
     className={cx({
       [classNames.buttonDisabled]: disabled,
       [classNames.buttonSecondary]: secondary,
@@ -59,7 +68,7 @@ const EnhancedButton = ({
     <ButtonPrimary_Background3>
       <ButtonPrimary_Label3>{children}</ButtonPrimary_Label3>
     </ButtonPrimary_Background3>
-  </StyledButton>
+  </ResponsiveButton>
 );
 
 export const ButtonsPreview = () => {
@@ -104,8 +113,6 @@ You'll _then_ be asked to set your **team ID**. You'll find it in the URL when y
 
 ![alt figma design](./docs/assets/finding-team.gif)
 
-You'll need to answer a few more questions, then you should be good to go!
-
 After you're done, you can go ahead and download your design files:
 
 ```
@@ -116,4 +123,4 @@ figmark pull
 
 That's it! At this point you should have generated React files that you can use directly in your code.
 
-> You'll also notice `*.pc` files which are the templates used to compile React files. To learn more about how to use these, you can checkout the [Paperclip](https://github.com/crcn/paperclip) repository.
+> You'll also notice `*.pc` files which React files are compiled from. To learn more about how to use PC files, you can check out the [Paperclip](https://github.com/crcn/paperclip) repository.
