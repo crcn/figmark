@@ -37,7 +37,7 @@ figmark pull
 
 > You'll also notice `*.pc` files which React files are compiled from. To learn more about how to use PC files, you can check out the [Paperclip](https://github.com/crcn/paperclip) repository.
 
-That's it! At this point you should have generated React files that you can import directly in your code.
+That's it! At this point you should have generated React files that you can import.
 
 <!-- ### Do's & Don'ts
 
