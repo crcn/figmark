@@ -318,7 +318,6 @@ const downloadProjectFile = async (
     }
   }
 
-  logInfo("Downloading images");
   fs.writeFileSync(pcFilePath, pcContent);
   await downloadImages(client, fileKey, fileDir);
   await downloadNodeImages(client, fileKey, file.document as Document, fileDir);

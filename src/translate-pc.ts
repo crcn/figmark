@@ -250,6 +250,8 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
 
   for (const component of allComponents) {
     context = translateComponentPreview(component, document, context);
+    context = translatePreview(component, document, context);
+    context = addBuffer(`\n`, context);
   }
 
   // Don't want to translate canvas children because of the explosion
@@ -317,7 +319,8 @@ const translatePreview = (
       node,
       document,
       node.type === NodeType.Instance ? node.componentId : node.id,
-      context
+      context,
+      inComponent
     );
   } else {
     context = addBuffer(
@@ -390,6 +393,7 @@ const translateInstancePreview = (
   document: Document,
   componentId: string,
   context: TranslateContext,
+  inComponent: boolean,
   includeClasses: boolean = true
 ) => {
   context = addBuffer(
@@ -413,15 +417,30 @@ const translateInstancePreview = (
       componentId,
       context
     );
-    context = addBuffer(
-      ` ${getUniqueNodeName(
-        componentTextNode,
-        getNodeSourceDocument(componentTextNode.id, context)
-      )}_text={<fragment>${translateTextCharacters(
-        textNode.characters
-      )}</fragment>}`,
-      context
+
+    const componentTextNodeName = getUniqueNodeName(
+      componentTextNode,
+      getNodeSourceDocument(componentTextNode.id, context)
     );
+
+    if (inComponent) {
+      // If in component, we want to pass text coming in from parent. Need to reference _instance_ of nested
+      // text node this time since there may be other instances within component.
+      context = addBuffer(
+        ` ${componentTextNodeName}_text={${getUniqueNodeName(
+          textNode,
+          document
+        )}_text}`,
+        context
+      );
+    } else {
+      context = addBuffer(
+        ` ${componentTextNodeName}_text={<fragment>${translateTextCharacters(
+          textNode.characters
+        )}</fragment>}`,
+        context
+      );
+    }
   }
   context = addBuffer(` />\n`, context);
   return context;
@@ -991,10 +1010,11 @@ const getTextStyle = (node: Text) => {
     newStyle["mix-blend-mode"] = BLEND_MODE_MAP[node.blendMode];
   }
 
-  if (style.textAlignVertical !== "TOP") {
-    newStyle.display = "flex";
-    newStyle["align-items"] = TEXT_ALIGN_VERTICAL_MAP[style.textAlignVertical];
-  }
+  // want to leave this up to code
+  // if (style.textAlignVertical !== "TOP") {
+  //   newStyle.display = "flex";
+  //   newStyle["align-items"] = TEXT_ALIGN_VERTICAL_MAP[style.textAlignVertical];
+  // }
 
   if (style.fontFamily) {
     newStyle["font-family"] = style.fontFamily;
