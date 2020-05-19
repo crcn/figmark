@@ -1,4 +1,4 @@
-Use Figma designs directly in your web application in a _responsive_ way.
+Figmark allows you to import Figma designs in React code.
 
 ### Resources
 
@@ -140,8 +140,6 @@ Here's what the code above looks like when loaded in a browser:
 That's all there is to it! 🙌
 
 #### Recommendations & Notes
-
-Just a few notes about this library usage:
 
 - You should GIT-ignore generated design files -- treat them like dependencies.
 - Unused layers are dropped from your application bundle if you're using tree-shaking.
