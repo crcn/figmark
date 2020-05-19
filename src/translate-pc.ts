@@ -43,6 +43,7 @@ import {
   DependencyMap,
   getOwnerInstance,
   isVectorLike,
+  getAllComponents,
 } from "./state";
 import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
@@ -50,6 +51,7 @@ import * as path from "path";
 import { camelCase } from "lodash";
 import { PaintType } from "figma-api";
 import { DEFAULT_EXPORT_SETTINGS } from "./constants";
+import { memoize } from "./memo";
 
 export const translateFigmaProjectToPaperclip = (
   file,
@@ -76,7 +78,7 @@ export const translateFigmaProjectToPaperclip = (
   context = translateStyles(file.document, context);
 
   context = addBuffer(`<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
-  context = translateComponents(file.document, file.document, context);
+  context = translateComponents(context);
 
   if (compilerOptions.includePreviews !== false) {
     context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
@@ -161,28 +163,15 @@ const getImportedComponentModuleName = (
   )}`;
 };
 
-const translateComponents = (
-  node: Node,
-  document: Document,
-  context: TranslateContext
-) => {
-  context = translateComponent(node, document, context);
-
-  if (!hasChildren(node) || node.type === NodeType.Instance) {
-    return context;
-  }
-
-  for (const child of node.children) {
-    context = translateComponents(child, document, context);
+const translateComponents = (context: TranslateContext) => {
+  const allComponents = getAllComponents(context.document);
+  for (const component of allComponents) {
+    context = translateComponent(component, context);
   }
   return context;
 };
 
-const translateComponent = (
-  node: Node,
-  document: Document,
-  context: TranslateContext
-) => {
+const translateComponent = (node: Node, context: TranslateContext) => {
   if (
     node.type === NodeType.Document ||
     node.type === NodeType.Canvas ||
@@ -190,6 +179,8 @@ const translateComponent = (
   ) {
     return context;
   }
+
+  const document = context.document;
 
   const componentName = getNodeComponentName(node, document);
   const withAbsoluteLayoutAttr =
@@ -239,13 +230,13 @@ const translateComponent = (
     context = endBlock(context);
     context = addBuffer(`</${tagName}>\n\n`, context);
   }
-  return context;
-};
 
-const getAllComponents = (document: Document) => {
-  return flattenNodes(document).filter(
-    (node) => node.type === NodeType.Component
-  ) as Component[];
+  if (hasChildren(node)) {
+    for (const child of node.children) {
+      context = translateComponent(child, context);
+    }
+  }
+  return context;
 };
 
 const translatePreviews = (document: Document, context: TranslateContext) => {
@@ -261,12 +252,14 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
     context = translateComponentPreview(component, document, context);
   }
 
-  for (const child of canvas.children) {
-    context = translatePreview(child, document, context);
+  // Don't want to translate canvas children because of the explosion
+  // of nodes.
+  // for (const child of canvas.children) {
+  //   context = translatePreview(child, document, context);
 
-    // some space between previews
-    context = addBuffer(`\n`, context);
-  }
+  //   // some space between previews
+  //   context = addBuffer(`\n`, context);
+  // }
 
   return context;
 };
@@ -439,7 +432,11 @@ const translateStyles = (document: Document, context: TranslateContext) => {
   context = startBlock(context);
   const allComponents = getAllComponents(document);
   context = translateNodeClassNames(allComponents, document, context, false);
-  context = translateNodeClassNames(document.children, document, context, true);
+
+  // Keep for reference. Don't want to translate all document children
+  // because this will cause an explosion of nodes. Only want to compile components since
+  // that's the only thing manageable
+  // context = translateNodeClassNames(document.children, document, context, true);
   context = endBlock(context);
   context = addBuffer(`</style>\n\n`, context);
   return context;

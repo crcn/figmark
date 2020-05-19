@@ -31,6 +31,7 @@ import {
   NodeType,
   Dependency,
   isVectorLike,
+  getAllComponents,
 } from "./state";
 import { spawn } from "child_process";
 import { Document } from "./state";
@@ -94,7 +95,8 @@ export const init = async () => {
     teamId: teamId,
     fileVersions,
     compilerOptions: {
-      includeAbsoluteLayout: true,
+      includeAbsoluteLayout: false,
+      includePreviews: true,
     },
     compileOnPull: true,
   };
@@ -299,8 +301,7 @@ const downloadProjectFile = async (
     fileNameFormat,
     projects
   );
-
-  console.log("translating;");
+  logInfo("Converting to paperclip");
 
   const pcContent = translateFigmaProjectToPaperclip(
     file,
@@ -308,8 +309,6 @@ const downloadProjectFile = async (
     compilerOptions,
     importedDocuments
   );
-
-  console.log("TRANSe;");
 
   if (fs.existsSync(pcFilePath)) {
     const existingFileContent = fs.readFileSync(pcFilePath, "utf8");
@@ -319,6 +318,7 @@ const downloadProjectFile = async (
     }
   }
 
+  logInfo("Downloading images");
   fs.writeFileSync(pcFilePath, pcContent);
   await downloadImages(client, fileKey, fileDir);
   await downloadNodeImages(client, fileKey, file.document as Document, fileDir);
@@ -432,7 +432,11 @@ const downloadNodeImages = async (
   document: Document,
   destPath: string
 ) => {
-  const allNodes = flattenNodes(document);
+  // only want to export components & their children
+  const allNodes = getAllComponents(document).reduce((allNodes, component) => {
+    allNodes.push(...flattenNodes(component));
+    return allNodes;
+  }, []);
 
   let nodeIdsByExport: Record<
     string,
@@ -462,15 +466,16 @@ const downloadNodeImages = async (
     }
 
     // export all SVG-like nodes
-    if (isVectorLike(child)) {
-      const key = getSettingKey(DEFAULT_EXPORT_SETTINGS);
-      nodeIdsByExport = addNodeToDownload(
-        child,
-        nodeIdsByExport,
-        DEFAULT_EXPORT_SETTINGS
-      );
-      nodeIdsByExport[key].nodes[child.id] = child;
-    }
+    // DON'T do this, otherwise we'll be in a world of pain with super large files.
+    // if (isVectorLike(child)) {
+    //   const key = getSettingKey(DEFAULT_EXPORT_SETTINGS);
+    //   nodeIdsByExport = addNodeToDownload(
+    //     child,
+    //     nodeIdsByExport,
+    //     DEFAULT_EXPORT_SETTINGS
+    //   );
+    //   nodeIdsByExport[key].nodes[child.id] = child;
+    // }
   }
 
   for (const key in nodeIdsByExport) {

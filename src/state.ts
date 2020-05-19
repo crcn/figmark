@@ -453,3 +453,9 @@ export const getTreeNodeIdMap = memoize(
     return map;
   }
 );
+
+export const getAllComponents = memoize((document: Document) => {
+  return flattenNodes(document).filter(
+    (node) => node.type === NodeType.Component
+  ) as Component[];
+});
