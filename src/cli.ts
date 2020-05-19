@@ -281,6 +281,7 @@ const downloadProjectFile = async (
     geometry: "paths",
     version: version === LATEST_VERSION_NAME ? undefined : version,
   });
+
   const pcFilePath = getFileKeySourcePath(
     fileKey,
     dest,
@@ -299,12 +300,16 @@ const downloadProjectFile = async (
     projects
   );
 
+  console.log("translating;");
+
   const pcContent = translateFigmaProjectToPaperclip(
     file,
     pcFilePath,
     compilerOptions,
     importedDocuments
   );
+
+  console.log("TRANSe;");
 
   if (fs.existsSync(pcFilePath)) {
     const existingFileContent = fs.readFileSync(pcFilePath, "utf8");

@@ -295,8 +295,9 @@ export const readConfigSync = (cwd: string) =>
   JSON.parse(fs.readFileSync(path.join(cwd, CONFIG_FILE_NAME), "utf8"));
 
 export const flattenNodes = memoize((node: Node): Node[] => {
-  return flattenNodes2(node);
-}) as (node: Node) => Node[];
+  const treeNodeMap = getTreeNodeIdMap(node);
+  return Object.values(treeNodeMap) as Node[];
+});
 
 export const getNodeById = memoize(
   (nodeId: string, document: Document): Node => {
@@ -350,32 +351,28 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
   return prefix + camelCase(node.name + postfix);
 };
 
-export const getNodePath = (node: Node, root: Node) => {
-  return findNodePath(node, root);
-};
+export const getNodePath = memoize((node: Node, root: Node) => {
+  const childParentMap = getChildParentMap(root);
+  const idMap = getTreeNodeIdMap(root);
+  let current = idMap[node.id];
+  const path: number[] = [];
+  while (1) {
+    const parent = childParentMap[current.id];
+    if (!parent) break;
+    const i = (parent as any).children.indexOf(current);
+    path.unshift(i);
+    current = parent;
+  }
+
+  return path;
+});
 
 export const getNodeByPath = (path: number[], root: any) => {
   let curr = root;
-  for (const part of path) {
-    curr = curr.children[part];
+  for (let i = 0, { length } = path; i < length; i++) {
+    curr = curr.children[path[i]];
   }
   return curr;
-};
-
-const findNodePath = (node: Node, current: any, path: number[] = []) => {
-  if (current === node) {
-    return path;
-  }
-  if (current.children) {
-    for (let i = 0, { length } = current.children; i < length; i++) {
-      const child = current.children[i];
-      const foundPath = findNodePath(node, child, [...path, i]);
-      if (foundPath) {
-        return foundPath;
-      }
-    }
-  }
-  return null;
 };
 
 export const getOwnerComponent = (node: Node, document: Document) => {
@@ -407,41 +404,52 @@ export const getOwnerInstance = (node: Node, document: Document) => {
 export const cleanupNodeId = (nodeId: string) => nodeId.replace(/[:;]/g, "");
 
 export const getNodeAncestors = (node: Node, document: Document): Node[] => {
-  const childParentMap = getChildParentMap(document);
-  const ancestors = [];
-  let current = node;
-  while (true) {
-    current = childParentMap[current.id];
-    if (!current) {
-      break;
-    }
-    ancestors.push(current);
-  }
-
-  return ancestors;
+  return filterTreeNodeParents(node, document, () => true);
 };
 
-const getChildParentMap = memoize((document: Document) => {
-  const allNodes = flattenNodes(document);
+const filterTreeNodeParents = (
+  node: Node,
+  root: Node,
+  filter: (node: Node) => boolean
+) => {
+  const parents: Node[] = [];
+  const path = getNodePath(node, root);
+  if (!path.length) return null;
+  for (let i = path.length; i--; ) {
+    const parent = getNodeByPath(path.slice(0, i), root);
+    if (filter(parent)) {
+      parents.push(parent);
+    }
+  }
+  return parents;
+};
 
-  const childParentMap = {};
-  for (const node of allNodes) {
-    if ((node as any).children) {
-      for (const child of (node as any).children) {
-        childParentMap[child.id] = node;
+export const getChildParentMap = memoize(
+  (current: Node): Record<string, Node> => {
+    const idMap = getTreeNodeIdMap(current);
+    const parentChildMap: any = {};
+
+    for (const id in idMap) {
+      const parent = idMap[id];
+      if ((parent as any).children) {
+        for (const child of (parent as any).children) {
+          parentChildMap[child.id] = parent;
+        }
       }
     }
+    return parentChildMap;
   }
+);
 
-  return childParentMap;
-});
+export const getTreeNodeIdMap = memoize(
+  (current: Node): Record<string, Node> => {
+    const map = {
+      [current.id]: current,
+    };
 
-const flattenNodes2 = (node: Node, allNodes: Node[] = []) => {
-  allNodes.push(node);
-  if ((node as any).children) {
-    for (const child of (node as any).children) {
-      flattenNodes2(child, allNodes);
+    if ((current as any).children) {
+      Object.assign(map, ...(current as any).children.map(getTreeNodeIdMap));
     }
+    return map;
   }
-  return allNodes;
-};
+);

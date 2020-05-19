@@ -714,7 +714,8 @@ const getCSSStyle = (
     );
 
     if (containsNonSolifFill) {
-      logNodeWarning(node, `cannot translate non-solid text color to CSS`);
+      // can be noisy, so ignore for now
+      // logNodeWarning(node, `cannot translate non-solid text color to CSS`);
     }
 
     // text color must be solid, so search for one
@@ -1037,12 +1038,13 @@ const getTextStyle = (node: Text) => {
     if (transform) {
       newStyle["text-transform"] = transform;
     } else {
-      logCannotConvertCssWarning(node, [
-        "Text",
-        "Letter Case",
-        "Case",
-        LETTER_CASE_LABEL_MAP[style.textCase] || style.textCase,
-      ]);
+      // Noisy, so ignore.
+      // logCannotConvertCssWarning(node, [
+      //   "Text",
+      //   "Letter Case",
+      //   "Case",
+      //   LETTER_CASE_LABEL_MAP[style.textCase] || style.textCase,
+      // ]);
     }
   }
 
@@ -1054,7 +1056,8 @@ const getTextStyle = (node: Text) => {
   }
 
   if (style.paragraphSpacing) {
-    logCannotConvertCssWarning(node, ["Text", "Paragraph Spacing"]);
+    // Noisy, so ignore
+    // logCannotConvertCssWarning(node, ["Text", "Paragraph Spacing"]);
   }
 
   return newStyle;
