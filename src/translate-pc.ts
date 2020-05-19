@@ -292,7 +292,7 @@ const translateComponentPreview = (
       document
     )} export component as="${getPreviewComponentName(node.id, context)}"${
       context.compilerOptions.includeAbsoluteLayout !== false
-        ? " withAbsoluteLayout"
+        ? " {withAbsoluteLayout}"
         : ""
     } {className}`,
     context
@@ -326,7 +326,9 @@ const translatePreview = (
     context = addBuffer(
       `<${getNodeComponentName(node, document)}${
         context.compilerOptions.includeAbsoluteLayout !== false
-          ? " withAbsoluteLayout"
+          ? inComponent
+            ? " {withAbsoluteLayout}"
+            : " withAbsoluteLayout"
           : ""
       }`,
       context
@@ -397,9 +399,10 @@ const translateInstancePreview = (
 ) => {
   context = addBuffer(
     `<${getPreviewComponentName(componentId, context)}${
-      context.compilerOptions.includeAbsoluteLayout !== false &&
-      instance.type !== NodeType.Component
-        ? " withAbsoluteLayout"
+      context.compilerOptions.includeAbsoluteLayout !== false
+        ? inComponent
+          ? " {withAbsoluteLayout}"
+          : " withAbsoluteLayout"
         : ""
     }`,
     context
