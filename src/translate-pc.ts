@@ -397,7 +397,8 @@ const translateInstancePreview = (
 ) => {
   context = addBuffer(
     `<${getPreviewComponentName(componentId, context)}${
-      context.compilerOptions.includeAbsoluteLayout !== false
+      context.compilerOptions.includeAbsoluteLayout !== false &&
+      instance.type !== NodeType.Component
         ? " withAbsoluteLayout"
         : ""
     }`,
@@ -405,7 +406,12 @@ const translateInstancePreview = (
   );
 
   // class already exists on class, so skip className
-  if (instance.type !== NodeType.Component) {
+  if (instance.type === NodeType.Component) {
+    context = addBuffer(
+      ` className="_Preview_${getUniqueNodeName(instance, context.document)}"`,
+      context
+    );
+  } else {
     context = addBuffer(
       ` className="${getNodeClassName(instance, context)}"`,
       context
@@ -452,6 +458,7 @@ const translateStyles = (document: Document, context: TranslateContext) => {
   context = startBlock(context);
   const allComponents = getAllComponents(document);
   context = translateNodeClassNames(allComponents, document, context, false);
+  context = translatePreviewClassNames(allComponents, context);
 
   // Keep for reference. Don't want to translate all document children
   // because this will cause an explosion of nodes. Only want to compile components since
@@ -602,6 +609,39 @@ const translateClassNames = (
 
   if (!isNested) {
     context = addBuffer(`\n`, context);
+  }
+  return context;
+};
+
+const translatePreviewClassNames = (
+  allComponents: Component[],
+  context: TranslateContext
+) => {
+  if (!context.compilerOptions.includePreviews) {
+    return false;
+  }
+
+  const PADDING = 10;
+  let ctop = PADDING;
+
+  for (const component of allComponents) {
+    const { x, y, width, height } = component.absoluteBoundingBox;
+    context = addBuffer(
+      `:global(._Preview_${getUniqueNodeName(
+        component,
+        context.document
+      )}) {\n`,
+      context
+    );
+    context = startBlock(context);
+    context = addBuffer(`position: absolute;\n`, context);
+    context = addBuffer(`left: ${PADDING}px;\n`, context);
+    context = addBuffer(`top: ${ctop}px;\n`, context);
+    context = addBuffer(`width: ${width}px;\n`, context);
+    context = addBuffer(`height: ${height}px;\n`, context);
+    context = endBlock(context);
+    context = addBuffer("}\n\n", context);
+    ctop += height + PADDING;
   }
   return context;
 };
