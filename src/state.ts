@@ -4,6 +4,8 @@ import { CONFIG_FILE_NAME } from "./constants";
 import { memoize } from "./memo";
 import { camelCase } from "lodash";
 
+const MAX_LABEL_NAME_LENGTH = 20;
+
 export type FileConfig = {
   key: string;
   version?: string;
@@ -315,6 +317,10 @@ export const hasChildren = (node: Node): node is Parent => {
   return (node as any).children?.length > 0;
 };
 
+const getClippedName = (name: string) =>
+  exceedsMaxLabelName(name) ? name.substr(0, MAX_LABEL_NAME_LENGTH) : name;
+const exceedsMaxLabelName = (name: string) =>
+  name.length > MAX_LABEL_NAME_LENGTH;
 export const getNodeExportFileName = (
   node: Node,
   document: Document,
@@ -325,7 +331,9 @@ export const getNodeExportFileName = (
   }.${settings.format.toLowerCase()}`;
 export const getUniqueNodeName = (node: Node, document: Document) => {
   const nodesThatShareName = flattenNodes(document)
-    .filter((child) => child.name === node.name)
+    .filter(
+      (child) => getClippedName(child.name) === getClippedName(child.name)
+    )
     .sort((a, b) => {
       // move components to the
       if (a.type === NodeType.Component) return -1;

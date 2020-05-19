@@ -393,8 +393,7 @@ const translateInstancePreview = (
   document: Document,
   componentId: string,
   context: TranslateContext,
-  inComponent: boolean,
-  includeClasses: boolean = true
+  inComponent: boolean
 ) => {
   context = addBuffer(
     `<${getPreviewComponentName(componentId, context)}${
@@ -404,7 +403,9 @@ const translateInstancePreview = (
     }`,
     context
   );
-  if (includeClasses) {
+
+  // class already exists on class, so skip className
+  if (instance.type !== NodeType.Component) {
     context = addBuffer(
       ` className="${getNodeClassName(instance, context)}"`,
       context
