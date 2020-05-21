@@ -47,6 +47,7 @@ import {
   getNodeAncestors,
   filterTreeNodeParents,
   Parent,
+  getOriginalNode,
 } from "./state";
 import { pascalCase, logWarn, logError } from "./utils";
 import * as chalk from "chalk";
@@ -538,9 +539,10 @@ const translateStyles = (document: Document, context: TranslateContext) => {
 
     const instancePath = nodeId.split(";");
     const classNamePath = instancePath
-      .map((id, index) => {
+      .map((id) => {
+        return "." + getNodeClassName(id.replace("I", ""), context);
         // const nodePath = index === 0 ? id.replace("I", "") : instancePath.slice(0, index);
-        return "._" + id.replace("I", "").replace(":", "_");
+        // return "._" + id.replace("I", "").replace(":", "_");
       })
       .join(" ");
     context = addBuffer(`:global(${classNamePath}) {\n`, context);
@@ -573,30 +575,6 @@ const translateStyles = (document: Document, context: TranslateContext) => {
   // context = translateNodeClassNames(document.children, document, context, true);
   context = endBlock(context);
   context = addBuffer(`</style>\n\n`, context);
-  return context;
-};
-
-const translateNodeClassNames = (
-  nodes: Node[],
-  document: Document,
-  context: TranslateContext,
-  skipComponents?: boolean
-) => {
-  for (const node of nodes) {
-    context = translateClassNames(
-      getNestedCSSStyles(
-        node,
-        context,
-        node.type === NodeType.Instance ? node : null
-      ),
-      document,
-      context,
-      false,
-      skipComponents,
-      node.type === NodeType.Component,
-      null
-    );
-  }
   return context;
 };
 
@@ -675,143 +653,6 @@ const computeNodeStyles = (node: Node, context: TranslateContext) => {
   return styles;
 };
 
-const translateClassNames = (
-  info: ComputedNestedStyleInfo,
-  document: Document,
-  context: TranslateContext,
-  isNested: boolean,
-  skipComponents: boolean,
-  parentIsComponent: boolean,
-  instance: Instance
-) => {
-  if (info.node.type === NodeType.Canvas) {
-    return info.children.reduce(
-      (context, childInfo) =>
-        translateClassNames(
-          childInfo,
-          document,
-          context,
-          false,
-          skipComponents,
-          false,
-          null
-        ),
-      context
-    );
-  }
-
-  if (!containsStyle(info, document)) {
-    return context;
-  }
-
-  // If node is an instance & is part of parent component, then it's
-  // Unique. If it's embedded in an instance however, then it's not, so
-  // get the component instance of it.
-  // FIXME: change parentIsComponent to isInInstance
-  const targetNode =
-    (info.node.type === NodeType.Instance && parentIsComponent) || !instance
-      ? info.node
-      : getInstanceSourceNode(
-          info.node,
-          instance,
-          instance.componentId,
-          context
-        );
-
-  // components are already compiled, so skip.
-  if (targetNode.type === NodeType.Component && skipComponents) {
-    return context;
-  }
-
-  const nodeSelector = `.${getNodeClassName(targetNode, context)}`;
-
-  if (isNested) {
-    context = addBuffer(`& :global(${nodeSelector}) {\n`, context);
-  } else {
-    context = addBuffer(`:global(${nodeSelector}) {\n`, context);
-  }
-
-  context = startBlock(context);
-
-  // TODO - for component instances, filter out props that match
-  // component props
-
-  // TODO - get CSS props ins
-  let hasLayoutDeclaration = false;
-  for (const key in info.style) {
-    if (isLayoutDeclaration(key)) {
-      hasLayoutDeclaration = true;
-      continue;
-    }
-    context = addBuffer(`${key}: ${info.style[key]};\n`, context);
-  }
-
-  if (isVectorLike(info.node)) {
-    context = addBuffer(`width: ${info.style.width};\n`, context);
-    context = addBuffer(`height: ${info.style.height};\n`, context);
-
-    // ABS layout should be opt-in since it's non-responsive.
-  }
-
-  if (
-    hasLayoutDeclaration &&
-    context.compilerOptions.includeAbsoluteLayout !== false
-  ) {
-    context = addBuffer(`&[data-with-absolute-layout] {\n`, context);
-    context = startBlock(context);
-    for (const key in info.style) {
-      if (isLayoutDeclaration(key)) {
-        context = addBuffer(`${key}: ${info.style[key]};\n`, context);
-      }
-    }
-    context = endBlock(context);
-    context = addBuffer(`}\n`, context);
-  }
-
-  // translate non-instance children
-  context = info.children.reduce((context, child) => {
-    if (child.node.type === NodeType.Component && skipComponents) {
-      return context;
-    }
-    // if (child.node.type === NodeType.Instance) {
-    //   return context;
-    // }
-
-    return translateClassNames(
-      child,
-      document,
-      context,
-      true,
-      skipComponents,
-      false,
-      info.node.type == NodeType.Instance ? info.node : null
-    );
-  }, context);
-
-  context = endBlock(context);
-  context = addBuffer(`}\n`, context);
-
-  // translate instance children outside of parent scope
-  // context = info.children.reduce((context, child) => {
-  //   if (child.node.type !== NodeType.Instance) {
-  //     return context;
-  //   }
-  //   return translateClassNames(
-  //     child,
-  //     document,
-  //     context,
-  //     false,
-  //     skipComponents,
-  //     info.node.type == NodeType.Instance ? info.node : null
-  //   );
-  // }, context);
-
-  if (!isNested) {
-    context = addBuffer(`\n`, context);
-  }
-  return context;
-};
-
 const translatePreviewClassNames = (
   allComponents: Component[],
   context: TranslateContext
@@ -850,27 +691,31 @@ const isLayoutDeclaration = (key: string) =>
 
 // TODO - need to use compoennt name
 const getNodeClassName = (nodeId: string, context: TranslateContext) => {
-  return "_" + nodeId.split(";").pop().replace("I", "").replace(":", "_");
+  const originalNode = getOriginalNode(nodeId, context.document);
 
-  const node = getSourceNode(
-    nodeId,
-    context.document,
-    context.importedDependencyMap
-  );
+  // return "_" + nodeId.split(";").pop().replace("I", "").replace(":", "_");
 
-  const nodeName = getUniqueNodeName(
-    node,
-    getNodeSourceDocument(
-      nodeId,
-      context.document,
-      context.importedDependencyMap
-    )
-  );
+  // const node = getSourceNode(
+  //   nodeId,
+  //   context.document,
+  //   context.importedDependencyMap
+  // );
+
+  // const nodeName = getUniqueNodeName(
+  //   node,
+  //   getNodeSourceDocument(
+  //     nodeId,
+  //     context.document,
+  //     context.importedDependencyMap
+  //   )
+  // );
 
   // We need to maintain node ID in class name since we're using the :global selector (which ensures that style overrides work properly).
   // ID here ensures that we're not accidentially overriding styles in other components or files.
   // ID is also prefixed here since that's the pattern used _internally_ for hash IDs.
-  return `_${camelCase(node.id)}_` + nodeName;
+  return (
+    `_${camelCase(nodeId)}_` + getUniqueNodeName(originalNode, context.document)
+  );
 };
 
 // TODO - need to use compoennt name

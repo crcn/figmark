@@ -330,11 +330,21 @@ export const getNodeExportFileName = (
   `node-${getUniqueNodeName(node, document)}@${
     settings.constraint.value
   }.${settings.format.toLowerCase()}`;
+
+export const getOriginalNode = (nodeId: string, document: Document) => {
+  return getNodeById(nodeId.split(";").pop().replace("I", ""), document);
+};
+
 export const getUniqueNodeName = (node: Node, document: Document) => {
   const nodesThatShareName = flattenNodes(document)
-    .filter(
-      (child) => getClippedName(child.name) === getClippedName(child.name)
-    )
+    .filter((child) => {
+      // skip instances -- we want the real node
+      if (child.id.indexOf(";") !== -1) {
+        return false;
+      }
+
+      getClippedName(node.name) === getClippedName(child.name);
+    })
     .sort((a, b) => {
       // move components to the
       if (a.type === NodeType.Component) return -1;
