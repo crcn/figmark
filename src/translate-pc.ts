@@ -44,13 +44,16 @@ import {
   getOwnerInstance,
   isVectorLike,
   getAllComponents,
+  getNodeAncestors,
+  filterTreeNodeParents,
+  Parent,
 } from "./state";
-import { pascalCase, logWarn } from "./utils";
+import { pascalCase, logWarn, logError } from "./utils";
 import * as chalk from "chalk";
 import * as path from "path";
-import { camelCase } from "lodash";
+import { camelCase, pick, omit } from "lodash";
 import { PaintType } from "figma-api";
-import { DEFAULT_EXPORT_SETTINGS } from "./constants";
+import { DEFAULT_EXPORT_SETTINGS, EMPTY_ARRAY } from "./constants";
 import { memoize } from "./memo";
 
 export const translateFigmaProjectToPaperclip = (
@@ -112,54 +115,92 @@ const getImportFilePaths = (context: TranslateContext) => {
 
 const getNodeSourceDocument = (
   id: string,
-  context: TranslateContext
+  document: Document,
+  importedDependencyMap: DependencyMap
 ): Document => {
   const dep =
-    context.importedDependencyMap[getImportedNodeDocumentPath(id, context)];
-  return dep ? dep.document : context.document;
+    importedDependencyMap[
+      getImportedNodeDocumentFilePath(id, importedDependencyMap)
+    ];
+  return dep ? dep.document : document;
 };
 
-const getSourceNode = (id: string, context: TranslateContext): Component => {
+const getNode = (
+  id: string,
+  document: Document,
+  importedDependencyMap: DependencyMap
+): Component => {
   return getNodeById(
-    getSourceNodeId(id, context),
-    getNodeSourceDocument(id, context)
+    // TODO - will need to replace component alias
+    id,
+    getNodeSourceDocument(id, document, importedDependencyMap)
   ) as Component;
 };
 
-const getSourceNodeId = (id: string, context: TranslateContext) => {
-  const dep = getImportedDependency(id, context);
-  return dep ? dep.idAliases[id] : id;
+const getSourceNode = (
+  id: string,
+  document: Document,
+  importedDependencyMap: DependencyMap
+): Component => {
+  return getNodeById(
+    getSourceNodeId(id, document, importedDependencyMap),
+    getNodeSourceDocument(id, document, importedDependencyMap)
+  ) as Component;
 };
 
-const isImportedComponent = (id: string, context: TranslateContext) => {
-  return getNodeSourceDocument(id, context) !== context.document;
+const extractParentComponentId = (id: string) =>
+  id.charAt(0) === "I" ? id.substr(1, id.indexOf(";")) : id;
+
+const getSourceNodeId = (
+  id: string,
+  document: Document,
+  importedDependencyMap: DependencyMap
+) => {
+  return id;
+  // const parentComponentAliasId = extractParentComponentId(id);
+  // const dep = getImportedDependency(parentComponentAliasId, importedDependencyMap);
+  // const componentId = dep ? dep.idAliases[parentComponentAliasId] : id;
+  // return
 };
 
-const getImportedDependency = (id: string, context: TranslateContext) => {
-  return context.importedDependencyMap[
-    getImportedNodeDocumentPath(id, context)
+const isImportedComponent = (
+  id: string,
+  document: Document,
+  importedDependencyMap: DependencyMap
+) => {
+  return (
+    getNodeSourceDocument(id, document, importedDependencyMap) !== document
+  );
+};
+
+const getImportedDependency = (
+  id: string,
+  importedDependencyMap: DependencyMap
+) => {
+  return importedDependencyMap[
+    getImportedNodeDocumentFilePath(id, importedDependencyMap)
   ];
 };
 
-const getImportedNodeDocumentPath = (
-  id: string,
-  context: TranslateContext
-): string => {
-  for (const filePath in context.importedDependencyMap) {
-    const dep = context.importedDependencyMap[filePath];
-    const idAlias = dep.idAliases[id];
-    if (getNodeById(idAlias, dep.document) || getNodeById(id, dep.document))
-      return filePath;
+const getImportedNodeDocumentFilePath = memoize(
+  (id: string, importedDependencyMap: DependencyMap): string => {
+    const componentId = extractParentComponentId(id);
+    for (const filePath in importedDependencyMap) {
+      const dep = importedDependencyMap[filePath];
+      const idAlias = dep.idAliases[componentId];
+      if (getNodeById(idAlias, dep.document) || getNodeById(id, dep.document))
+        return filePath;
+    }
+    return null;
   }
-  return null;
-};
+);
 
 const getImportedComponentModuleName = (
   id: string,
   context: TranslateContext
 ) => {
   return `module${getImportFilePaths(context).indexOf(
-    getImportedNodeDocumentPath(id, context)
+    getImportedNodeDocumentFilePath(id, context.importedDependencyMap)
   )}`;
 };
 
@@ -195,7 +236,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
         document,
         node.exportSettings[0]
       )}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
-        node,
+        node.id,
         context
       )} {className?}">\n\n`,
       context
@@ -207,7 +248,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
   if (isVectorLike(node)) {
     context = addBuffer(
       `<div export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
-        node,
+        node.id,
         context
       )} {className?}" width="${node.size.x}" height="${node.size.y}">\n`,
       context
@@ -220,7 +261,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
 
     context = addBuffer(
       `<${tagName} export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
-        node,
+        node.id,
         context
       )} {className?}">\n`,
       context
@@ -268,12 +309,18 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
 
 const getPreviewComponentName = (nodeId: string, context: TranslateContext) => {
   // note we fetch component since nodeId & id might not match up (nodeId may be imported)
-  const component = getSourceNode(nodeId, context);
+  const component = getSourceNode(
+    nodeId,
+    context.document,
+    context.importedDependencyMap
+  );
   let name =
     "_Preview_" +
     pascalCase(component.name + "_" + cleanupNodeId(component.id));
 
-  if (isImportedComponent(nodeId, context)) {
+  if (
+    isImportedComponent(nodeId, context.document, context.importedDependencyMap)
+  ) {
     name = getImportedComponentModuleName(nodeId, context) + ":" + name;
   }
 
@@ -376,13 +423,17 @@ const translateTextCharacters = (characters: string) => {
   return characters.replace(/[\n\r]+/g, " <br /> ");
 };
 
-const getComponentNestedNode = (
+const getInstanceSourceNode = (
   nestedInstanceNode: Node,
   instance: Node,
   componentId: string,
   context: TranslateContext
 ) => {
-  const component = getSourceNode(componentId, context);
+  const component = getSourceNode(
+    componentId,
+    context.document,
+    context.importedDependencyMap
+  );
   const nodePath = getNodePath(nestedInstanceNode, instance);
   if (!component) {
     throw new Error(`Cannot find component: ${componentId}`);
@@ -416,12 +467,12 @@ const translateInstancePreview = (
     );
   } else {
     context = addBuffer(
-      ` className="${getNodeClassName(instance, context)}"`,
+      ` className="${getNodeClassName(instance.id, context)}"`,
       context
     );
   }
   for (const textNode of getAllTextNodes(instance)) {
-    const componentTextNode = getComponentNestedNode(
+    const componentTextNode = getInstanceSourceNode(
       textNode,
       instance,
       componentId,
@@ -430,7 +481,11 @@ const translateInstancePreview = (
 
     const componentTextNodeName = getUniqueNodeName(
       componentTextNode,
-      getNodeSourceDocument(componentTextNode.id, context)
+      getNodeSourceDocument(
+        componentTextNode.id,
+        context.document,
+        context.importedDependencyMap
+      )
     );
 
     if (inComponent) {
@@ -456,11 +511,60 @@ const translateInstancePreview = (
   return context;
 };
 
+const LAYOUT_STYLE_PROP_NAMES = ["left", "top", "width", "height"];
+
+const splitLayoutStyle = (style: any) => [
+  pick(style, LAYOUT_STYLE_PROP_NAMES),
+  omit(style, LAYOUT_STYLE_PROP_NAMES),
+];
+
 const translateStyles = (document: Document, context: TranslateContext) => {
   context = addBuffer(`<style>\n`, context);
   context = startBlock(context);
+  const computedStyles = computeComponentStyles(context);
+
+  for (const nodeId in computedStyles) {
+    const style = computedStyles[nodeId];
+    const [layoutStyle, appearanceStyle] = splitLayoutStyle(style);
+
+    const hasLayoutStyle = Object.keys(layoutStyle).length > 0;
+
+    if (
+      Object.keys(appearanceStyle).length === 0 &&
+      !(context.compilerOptions.includeAbsoluteLayout && hasLayoutStyle)
+    ) {
+      continue;
+    }
+
+    const instancePath = nodeId.split(";");
+    const classNamePath = instancePath
+      .map((id, index) => {
+        // const nodePath = index === 0 ? id.replace("I", "") : instancePath.slice(0, index);
+        return "._" + id.replace("I", "").replace(":", "_");
+      })
+      .join(" ");
+    context = addBuffer(`:global(${classNamePath}) {\n`, context);
+    context = startBlock(context);
+
+    for (const key in appearanceStyle) {
+      context = addBuffer(`${key}: ${appearanceStyle[key]};\n`, context);
+    }
+
+    if (context.compilerOptions.includeAbsoluteLayout && hasLayoutStyle) {
+      context = addBuffer(`&[data-with-absolute-layout] {\n`, context);
+      context = startBlock(context);
+      for (const key in layoutStyle) {
+        context = addBuffer(`${key}: ${layoutStyle[key]};\n`, context);
+      }
+      context = endBlock(context);
+      context = addBuffer(`}\n`, context);
+    }
+
+    context = endBlock(context);
+    context = addBuffer("}\n\n", context);
+  }
   const allComponents = getAllComponents(document);
-  context = translateNodeClassNames(allComponents, document, context, false);
+  // context = translateNodeClassNames(allComponents, document, context, false);
   context = translatePreviewClassNames(allComponents, context);
 
   // Keep for reference. Don't want to translate all document children
@@ -489,10 +593,86 @@ const translateNodeClassNames = (
       context,
       false,
       skipComponents,
+      node.type === NodeType.Component,
       null
     );
   }
   return context;
+};
+
+const computeComponentStyles = (context: TranslateContext) => {
+  const computed = {};
+
+  const components = getAllComponents(context.document);
+
+  for (const component of components) {
+    Object.assign(computed, computeNodeStyles(component, context));
+  }
+  return computed;
+};
+
+const computeNodeStyles = (node: Node, context: TranslateContext) => {
+  const computedStyle = getCSSStyle(node, context);
+  let style = computedStyle;
+
+  if (node.id.indexOf(";") !== -1) {
+    const instancePath = node.id.split(";");
+    const selfNodeId = instancePath[instancePath.length - 1];
+
+    // iterate through all instances
+    for (let i = instancePath.length - 1; i--; ) {
+      const prevNodeId =
+        i === 0
+          ? selfNodeId
+          : "I" +
+            instancePath
+              .slice(i - 1, instancePath.length - 1)
+              .join(";")
+              .replace("I", "");
+      const prevNode = getNode(
+        prevNodeId,
+        context.document,
+        context.importedDependencyMap
+      );
+      const prevNodeStyle = getCSSStyle(prevNode, context);
+
+      const updatedStyle = {};
+
+      for (const key in prevNodeStyle) {
+        // no change from previous style, so skip since style is already applied
+        if (style[key] === prevNodeStyle[key]) {
+          continue;
+        }
+
+        // Figma computes all styles on current instance, so if it doesn't exist, then
+        // it's unset, so define that
+        if (!computedStyle[key]) {
+          updatedStyle[key] = "unset";
+        }
+      }
+
+      for (const key in style) {
+        // if current style is different than previous style, then keep it.
+        if (style[key] !== prevNodeStyle[key]) {
+          updatedStyle[key] = style[key];
+        }
+      }
+
+      style = updatedStyle;
+    }
+  }
+
+  const styles = {
+    [node.id]: style,
+  };
+
+  if (hasChildren(node)) {
+    for (const child of node.children) {
+      Object.assign(styles, computeNodeStyles(child, context));
+    }
+  }
+
+  return styles;
 };
 
 const translateClassNames = (
@@ -501,7 +681,8 @@ const translateClassNames = (
   context: TranslateContext,
   isNested: boolean,
   skipComponents: boolean,
-  instance?: Instance
+  parentIsComponent: boolean,
+  instance: Instance
 ) => {
   if (info.node.type === NodeType.Canvas) {
     return info.children.reduce(
@@ -512,6 +693,7 @@ const translateClassNames = (
           context,
           false,
           skipComponents,
+          false,
           null
         ),
       context
@@ -522,10 +704,14 @@ const translateClassNames = (
     return context;
   }
 
+  // If node is an instance & is part of parent component, then it's
+  // Unique. If it's embedded in an instance however, then it's not, so
+  // get the component instance of it.
+  // FIXME: change parentIsComponent to isInInstance
   const targetNode =
-    info.node.type === NodeType.Instance || !instance
+    (info.node.type === NodeType.Instance && parentIsComponent) || !instance
       ? info.node
-      : getComponentNestedNode(
+      : getInstanceSourceNode(
           info.node,
           instance,
           instance.componentId,
@@ -582,33 +768,43 @@ const translateClassNames = (
     context = addBuffer(`}\n`, context);
   }
 
-  const isComponentInstance =
-    targetNode.type === NodeType.Instance ||
-    targetNode.type === NodeType.Component;
-
-  if (!isComponentInstance) {
-    context = endBlock(context);
-    context = addBuffer(`}\n`, context);
-  }
-
+  // translate non-instance children
   context = info.children.reduce((context, child) => {
     if (child.node.type === NodeType.Component && skipComponents) {
       return context;
     }
+    // if (child.node.type === NodeType.Instance) {
+    //   return context;
+    // }
+
     return translateClassNames(
       child,
       document,
       context,
-      isComponentInstance,
+      true,
       skipComponents,
+      false,
       info.node.type == NodeType.Instance ? info.node : null
     );
   }, context);
 
-  if (isComponentInstance) {
-    context = endBlock(context);
-    context = addBuffer(`}\n`, context);
-  }
+  context = endBlock(context);
+  context = addBuffer(`}\n`, context);
+
+  // translate instance children outside of parent scope
+  // context = info.children.reduce((context, child) => {
+  //   if (child.node.type !== NodeType.Instance) {
+  //     return context;
+  //   }
+  //   return translateClassNames(
+  //     child,
+  //     document,
+  //     context,
+  //     false,
+  //     skipComponents,
+  //     info.node.type == NodeType.Instance ? info.node : null
+  //   );
+  // }, context);
 
   if (!isNested) {
     context = addBuffer(`\n`, context);
@@ -621,7 +817,7 @@ const translatePreviewClassNames = (
   context: TranslateContext
 ) => {
   if (!context.compilerOptions.includePreviews) {
-    return false;
+    return context;
   }
 
   const PADDING = 10;
@@ -653,10 +849,22 @@ const isLayoutDeclaration = (key: string) =>
   /position|left|top|width|height/.test(key);
 
 // TODO - need to use compoennt name
-const getNodeClassName = (node: Node, context: TranslateContext) => {
+const getNodeClassName = (nodeId: string, context: TranslateContext) => {
+  return "_" + nodeId.split(";").pop().replace("I", "").replace(":", "_");
+
+  const node = getSourceNode(
+    nodeId,
+    context.document,
+    context.importedDependencyMap
+  );
+
   const nodeName = getUniqueNodeName(
     node,
-    getNodeSourceDocument(node.id, context)
+    getNodeSourceDocument(
+      nodeId,
+      context.document,
+      context.importedDependencyMap
+    )
   );
 
   // We need to maintain node ID in class name since we're using the :global selector (which ensures that style overrides work properly).
@@ -792,19 +1000,57 @@ const getCSSStyle = (
     // logNodeWarning(node, `Can't generate styles for ${node.type}`);
   }
 
-  if (instance && node.type !== NodeType.Instance) {
-    const targetNode = getComponentNestedNode(
-      node,
-      instance,
-      instance.componentId,
-      context
-    );
-    const targetNodeStyle = getCSSStyle(targetNode, context);
-    style = getStyleOverrides(targetNodeStyle, style);
-  }
+  // if (instance && node.type !== NodeType.Instance) {
+  //   const targetNode = getInstanceSourceNode(
+  //     node,
+  //     instance,
+  //     instance.componentId,
+  //     context
+  //   );
+  //   // const nodeInstances = [node, ...getPrevSourceNodeInstances(node, context)];
+
+  //   // const sstyle = nodeInstances.reduce((style, instance) => {
+
+  //   // });
+
+  //   const targetNodeStyle = getCSSStyle(targetNode, context);
+  //   style = getStyleOverrides(targetNodeStyle, style);
+  // }
 
   return style;
 };
+
+/**
+ *
+ */
+
+// const getPrevSourceNodeInstance = (node: Node, context: TranslateContext) => {
+
+//   const ancestors = getNodeAncestors(node, context.document);
+
+//   const nodePath = [(ancestors[0] as Parent).children.indexOf(node)];
+//   for (let i = 0, {length} = ancestors; i < length; i++) {
+
+//     const ancestor = ancestors[i];
+//     if (ancestor.type === NodeType.Instance) {
+//       const ancestorComponent = getSourceNode(ancestor.componentId, context);
+
+//       // In Figma you can delete components & maintain instances. If we find that
+//       // case, the short circuit -- we don't want to deal with that situation.
+//       if (!ancestorComponent) {
+//         logNodeWarning(ancestor, "Found instance that doesn't belong to component");
+//         break;
+//       }
+
+//       return getNodeByPath(nodePath, ancestorComponent);
+//     } else if (ancestor.type === NodeType.Component) {
+//       break;
+//     }
+//     nodePath.unshift(i);
+//   }
+
+//   return null;
+// };
 
 const getVectorStyle = (
   node: VectorNodeProps & BaseNode<any>,

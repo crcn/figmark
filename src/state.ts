@@ -3,6 +3,7 @@ import * as path from "path";
 import { CONFIG_FILE_NAME } from "./constants";
 import { memoize } from "./memo";
 import { camelCase } from "lodash";
+// _7113_testB3_testA24
 
 const MAX_LABEL_NAME_LENGTH = 20;
 
@@ -303,7 +304,7 @@ export const flattenNodes = memoize((node: Node): Node[] => {
 
 export const getNodeById = memoize(
   (nodeId: string, document: Document): Node => {
-    return flattenNodes(document).find((node) => node.id === nodeId);
+    return getTreeNodeIdMap(document)[nodeId];
   }
 );
 
@@ -415,7 +416,7 @@ export const getNodeAncestors = (node: Node, document: Document): Node[] => {
   return filterTreeNodeParents(node, document, () => true);
 };
 
-const filterTreeNodeParents = (
+export const filterTreeNodeParents = (
   node: Node,
   root: Node,
   filter: (node: Node) => boolean

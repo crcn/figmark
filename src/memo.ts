@@ -1,6 +1,6 @@
 import * as LRU from "lru-cache";
 
-const DEFAULT_LRU_MAX = 10000;
+const DEFAULT_LRU_MAX = 1000 * 100;
 
 // need this for default arguments
 const getArgumentCount = (fn: Function) => {
@@ -9,7 +9,7 @@ const getArgumentCount = (fn: Function) => {
   const args = params
     .replace(/[=>()]/g, "")
     .split(/\s*,\s*/)
-    .filter(arg => arg.substr(0, 3) !== "...");
+    .filter((arg) => arg.substr(0, 3) !== "...");
 
   return args.length;
 };

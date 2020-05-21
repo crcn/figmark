@@ -10,3 +10,4 @@ export const DEFAULT_EXPORT_SETTINGS: ExportSettings = {
   format: "SVG",
   constraint: { value: 1, type: "SCALE" },
 };
+export const EMPTY_ARRAY = [];
