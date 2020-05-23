@@ -48,6 +48,7 @@ import {
   filterTreeNodeParents,
   Parent,
   getOriginalNode,
+  getChildParentMap,
 } from "./state";
 import { pascalCase, logWarn, logError } from "./utils";
 import * as chalk from "chalk";
@@ -95,10 +96,11 @@ const translateImports = (context: TranslateContext) => {
   const importFilePaths = getImportFilePaths(context);
   for (let i = 0, { length } = importFilePaths; i < length; i++) {
     const filePath = importFilePaths[i];
-    const relativePath = path.relative(
-      path.dirname(context.filePath),
-      filePath
-    );
+    let relativePath = path.relative(path.dirname(context.filePath), filePath);
+
+    if (relativePath.charAt(0) !== ".") {
+      relativePath = "./" + relativePath;
+    }
     context = addBuffer(
       `<import as="module${i}" src="${relativePath}" />\n`,
       context
@@ -114,15 +116,13 @@ const getImportFilePaths = (context: TranslateContext) => {
   return Object.keys(context.importedDependencyMap);
 };
 
-const getNodeSourceDocument = (
+const getNodeDocument = (
   id: string,
   document: Document,
   importedDependencyMap: DependencyMap
 ): Document => {
   const dep =
-    importedDependencyMap[
-      getImportedNodeDocumentFilePath(id, importedDependencyMap)
-    ];
+    importedDependencyMap[getNodeDocumentFilePath(id, importedDependencyMap)];
   return dep ? dep.document : document;
 };
 
@@ -134,18 +134,37 @@ const getNode = (
   return getNodeById(
     // TODO - will need to replace component alias
     id,
-    getNodeSourceDocument(id, document, importedDependencyMap)
+    getNodeDocument(id, document, importedDependencyMap)
   ) as Component;
 };
 
-const getSourceNode = (
-  id: string,
+// const getInstanceSourceNode = (
+//   node: Node,
+//   instanceId: string,
+//   document: Document,
+//   importedDependencyMap: DependencyMap
+// ): Node => {
+//   const instance = getNodeById(instanceId, document) as Instance;
+//   const nodePath = getNodePath(node, instance);
+//   const component = getComponentById(instance.componentId, document, importedDependencyMap);
+//   return getNodeByPath(nodePath, component);
+// };
+
+const getComponentById = (
+  componentId: string,
   document: Document,
   importedDependencyMap: DependencyMap
 ): Component => {
+  const documentFilePath = getNodeDocumentFilePath(
+    componentId,
+    importedDependencyMap
+  );
   return getNodeById(
-    getSourceNodeId(id, document, importedDependencyMap),
-    getNodeSourceDocument(id, document, importedDependencyMap)
+    documentFilePath
+      ? importedDependencyMap[documentFilePath].idAliases[componentId] ||
+          componentId
+      : componentId,
+    getNodeDocument(componentId, document, importedDependencyMap)
   ) as Component;
 };
 
@@ -157,6 +176,26 @@ const getSourceNodeId = (
   document: Document,
   importedDependencyMap: DependencyMap
 ) => {
+  // const sourceId = id.split(";").map(part => {
+
+  //   const partId = part.replace("I", "");
+
+  //   console.log("PT", partId);
+
+  //   for (const path in importedDependencyMap) {
+  //     const dep = importedDependencyMap[path];
+  //     console.log(dep.idAliases);
+  //     const aliasId = dep.idAliases[partId];
+  //     if (aliasId) {
+  //       console.log("AL", aliasId);
+  //       return part.replace(partId, aliasId);
+  //     }
+  //   }
+
+  //   return part;
+  // });
+
+  // console.log(id, sourceId);
   return id;
   // const parentComponentAliasId = extractParentComponentId(id);
   // const dep = getImportedDependency(parentComponentAliasId, importedDependencyMap);
@@ -169,9 +208,7 @@ const isImportedComponent = (
   document: Document,
   importedDependencyMap: DependencyMap
 ) => {
-  return (
-    getNodeSourceDocument(id, document, importedDependencyMap) !== document
-  );
+  return getNodeDocument(id, document, importedDependencyMap) !== document;
 };
 
 const getImportedDependency = (
@@ -179,11 +216,11 @@ const getImportedDependency = (
   importedDependencyMap: DependencyMap
 ) => {
   return importedDependencyMap[
-    getImportedNodeDocumentFilePath(id, importedDependencyMap)
+    getNodeDocumentFilePath(id, importedDependencyMap)
   ];
 };
 
-const getImportedNodeDocumentFilePath = memoize(
+const getNodeDocumentFilePath = memoize(
   (id: string, importedDependencyMap: DependencyMap): string => {
     const componentId = extractParentComponentId(id);
     for (const filePath in importedDependencyMap) {
@@ -201,7 +238,7 @@ const getImportedComponentModuleName = (
   context: TranslateContext
 ) => {
   return `module${getImportFilePaths(context).indexOf(
-    getImportedNodeDocumentFilePath(id, context.importedDependencyMap)
+    getNodeDocumentFilePath(id, context.importedDependencyMap)
   )}`;
 };
 
@@ -310,7 +347,7 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
 
 const getPreviewComponentName = (nodeId: string, context: TranslateContext) => {
   // note we fetch component since nodeId & id might not match up (nodeId may be imported)
-  const component = getSourceNode(
+  const component = getComponentById(
     nodeId,
     context.document,
     context.importedDependencyMap
@@ -425,21 +462,90 @@ const translateTextCharacters = (characters: string) => {
 };
 
 const getInstanceSourceNode = (
-  nestedInstanceNode: Node,
+  descendent: Node,
   instance: Node,
   componentId: string,
   context: TranslateContext
 ) => {
-  const component = getSourceNode(
+  const component = getComponentById(
     componentId,
     context.document,
     context.importedDependencyMap
   );
-  const nodePath = getNodePath(nestedInstanceNode, instance);
+  // console.log(nestedInstanceNode, instance);
+  // const pcmap = getChildParentMap(instance);
+  // console.log(pcmap[nestedInstanceNode.id], nestedInstanceNode.id, instance.id);
+
+  // if (!pcmap[nestedInstanceNode.id]) {
+  //   console.log(JSON.stringify(instance, null, 2));
+  // }
+  const nodePath = getNodePath(descendent, instance);
   if (!component) {
     throw new Error(`Cannot find component: ${componentId}`);
   }
   return getNodeByPath(nodePath, component);
+};
+
+const getPrevNode = memoize(
+  (
+    nodeId: string,
+    document: Document,
+    importedDependencyMap: DependencyMap
+  ) => {
+    if (nodeId.charAt(0) !== "I") {
+      return null;
+    }
+    const nodeDocument = getNodeDocument(
+      nodeId,
+      document,
+      importedDependencyMap
+    );
+    const node = getNodeById(nodeId, nodeDocument);
+    const instance = getNodeInstance(nodeId, document, importedDependencyMap);
+    const nodePath = getNodePath(node, instance);
+
+    const component = getComponentById(
+      instance.componentId,
+      document,
+      importedDependencyMap
+    );
+
+    return getNodeByPath(nodePath, component);
+  }
+);
+
+const getPrevNodes = memoize(
+  (
+    nodeId: string,
+    document: Document,
+    importedDependencyMap: DependencyMap
+  ) => {
+    const prevNodeInstances = [];
+    const nodeDocument = getNodeDocument(
+      nodeId,
+      document,
+      importedDependencyMap
+    );
+    let currNode = getNodeById(nodeId, nodeDocument);
+    while (1) {
+      currNode = getPrevNode(currNode.id, document, importedDependencyMap);
+      if (!currNode) {
+        break;
+      }
+      prevNodeInstances.push(currNode);
+    }
+    return prevNodeInstances;
+  }
+);
+
+const getNodeInstance = (
+  nodeId: string,
+  document: Document,
+  importedDependencyMap: DependencyMap
+) => {
+  const nodeDocument = getNodeDocument(nodeId, document, importedDependencyMap);
+  const instanceId = nodeId.substr(1, nodeId.indexOf(";") - 1);
+  return getNodeById(instanceId, nodeDocument) as Instance;
 };
 
 const translateInstancePreview = (
@@ -482,7 +588,7 @@ const translateInstancePreview = (
 
     const componentTextNodeName = getUniqueNodeName(
       componentTextNode,
-      getNodeSourceDocument(
+      getNodeDocument(
         componentTextNode.id,
         context.document,
         context.importedDependencyMap
@@ -537,15 +643,39 @@ const translateStyles = (document: Document, context: TranslateContext) => {
       continue;
     }
 
-    const instancePath = nodeId.split(";");
-    const classNamePath = instancePath
-      .map((id) => {
-        return "." + getNodeClassName(id.replace("I", ""), context);
-        // const nodePath = index === 0 ? id.replace("I", "") : instancePath.slice(0, index);
-        // return "._" + id.replace("I", "").replace(":", "_");
-      })
-      .join(" ");
-    context = addBuffer(`:global(${classNamePath}) {\n`, context);
+    const node = getNodeById(
+      nodeId,
+      getNodeDocument(nodeId, context.document, context.importedDependencyMap)
+    );
+
+    const nodes = [
+      node,
+      ...getPrevNodes(nodeId, context.document, context.importedDependencyMap),
+    ];
+
+    const classNamePath = nodes.map((node) => {
+      const component = getOwnerComponent(
+        node,
+        getNodeDocument(
+          node.id,
+          context.document,
+          context.importedDependencyMap
+        )
+      );
+      // const instance = getNodeInstance(node.id, context.document, context.importedDependencyMap);
+      // const
+      // const component = instance
+      return "." + getNodeClassName(component.id, context);
+    });
+
+    const nodeClasName =
+      "." + getNodeClassName(nodes[nodes.length - 1].id, context);
+
+    const selector = `${classNamePath.join(
+      ""
+    )} ${nodeClasName}, ${classNamePath.join(" ")} ${nodeClasName}`.trim();
+
+    context = addBuffer(`:global(${selector}) {\n`, context);
     context = startBlock(context);
 
     for (const key in appearanceStyle) {
@@ -593,32 +723,22 @@ const computeNodeStyles = (node: Node, context: TranslateContext) => {
   const computedStyle = getCSSStyle(node, context);
   let style = computedStyle;
 
-  if (node.id.indexOf(";") !== -1) {
-    const instancePath = node.id.split(";");
-    const selfNodeId = instancePath[instancePath.length - 1];
+  // instance present?
+  if (node.id.charAt(0) === "I") {
+    const prevNodes = getPrevNodes(
+      node.id,
+      context.document,
+      context.importedDependencyMap
+    );
 
-    // iterate through all instances
-    for (let i = instancePath.length - 1; i--; ) {
-      const prevNodeId =
-        i === 0
-          ? selfNodeId
-          : "I" +
-            instancePath
-              .slice(i - 1, instancePath.length - 1)
-              .join(";")
-              .replace("I", "");
-      const prevNode = getNode(
-        prevNodeId,
-        context.document,
-        context.importedDependencyMap
-      );
-      const prevNodeStyle = getCSSStyle(prevNode, context);
+    for (const currNode of prevNodes) {
+      const currNodeStyle = getCSSStyle(currNode, context);
 
       const updatedStyle = {};
 
-      for (const key in prevNodeStyle) {
+      for (const key in currNodeStyle) {
         // no change from previous style, so skip since style is already applied
-        if (style[key] === prevNodeStyle[key]) {
+        if (style[key] === currNodeStyle[key]) {
           continue;
         }
 
@@ -631,7 +751,7 @@ const computeNodeStyles = (node: Node, context: TranslateContext) => {
 
       for (const key in style) {
         // if current style is different than previous style, then keep it.
-        if (style[key] !== prevNodeStyle[key]) {
+        if (style[key] !== currNodeStyle[key]) {
           updatedStyle[key] = style[key];
         }
       }
@@ -691,7 +811,7 @@ const isLayoutDeclaration = (key: string) =>
 
 // TODO - need to use compoennt name
 const getNodeClassName = (nodeId: string, context: TranslateContext) => {
-  const originalNode = getOriginalNode(nodeId, context.document);
+  const node = getNode(nodeId, context.document, context.importedDependencyMap);
 
   // return "_" + nodeId.split(";").pop().replace("I", "").replace(":", "_");
 
@@ -703,7 +823,7 @@ const getNodeClassName = (nodeId: string, context: TranslateContext) => {
 
   // const nodeName = getUniqueNodeName(
   //   node,
-  //   getNodeSourceDocument(
+  //   getNodeDocument(
   //     nodeId,
   //     context.document,
   //     context.importedDependencyMap
@@ -714,7 +834,11 @@ const getNodeClassName = (nodeId: string, context: TranslateContext) => {
   // ID here ensures that we're not accidentially overriding styles in other components or files.
   // ID is also prefixed here since that's the pattern used _internally_ for hash IDs.
   return (
-    `_${camelCase(nodeId)}_` + getUniqueNodeName(originalNode, context.document)
+    `_${camelCase(nodeId)}_` +
+    getUniqueNodeName(
+      node,
+      getNodeDocument(nodeId, context.document, context.importedDependencyMap)
+    )
   );
 };
 

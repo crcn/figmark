@@ -377,6 +377,7 @@ const getImportedDocuments = async (
       const componentInfo = (await client.getComponent(
         componentRef.key
       )) as any;
+
       if (componentInfo.meta.file_key === fileKey) {
         continue;
       }
