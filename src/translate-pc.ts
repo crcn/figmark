@@ -11,7 +11,6 @@ import {
   Node,
   NodeType,
   Text,
-  flattenNodes,
   getUniqueNodeName,
   RadialGradient,
   LinearGradient,
@@ -20,7 +19,6 @@ import {
   Document,
   FrameProps,
   cleanupNodeId,
-  Rectangle,
   getNodeById,
   getAllTextNodes,
   Color,
@@ -37,39 +35,31 @@ import {
   getNodeByPath,
   Instance,
   hasVectorProps,
-  VectorNode,
   CompilerOptions,
   getOwnerComponent,
   DependencyMap,
-  getOwnerInstance,
   isVectorLike,
   getAllComponents,
-  getNodeAncestors,
-  filterTreeNodeParents,
-  Parent,
-  getOriginalNode,
-  getChildParentMap,
+  DependencyGraph,
+  Dependency2,
+  containsNode,
 } from "./state";
-import { pascalCase, logWarn, logError } from "./utils";
+import { pascalCase, logWarn } from "./utils";
 import * as chalk from "chalk";
 import * as path from "path";
 import { camelCase, pick, omit } from "lodash";
-import { PaintType } from "figma-api";
-import { DEFAULT_EXPORT_SETTINGS, EMPTY_ARRAY } from "./constants";
+import { DEFAULT_EXPORT_SETTINGS } from "./constants";
 import { memoize } from "./memo";
+import { uniq } from "lodash";
 
 export const translateFigmaProjectToPaperclip = (
-  file,
   filePath: string,
-  compilerOptions: CompilerOptions,
-  importedDependencyMap: DependencyMap
+  graph: DependencyGraph,
+  compilerOptions: CompilerOptions
 ) => {
-  let context = createTranslateContext(
-    file.document,
-    filePath,
-    compilerOptions,
-    importedDependencyMap
-  );
+  const entry = graph[filePath];
+
+  let context = createTranslateContext(filePath, compilerOptions, graph);
 
   context = addBuffer(`\n<!--\n`, context);
   context = startBlock(context);
@@ -80,14 +70,14 @@ export const translateFigmaProjectToPaperclip = (
   context = translateImports(context);
 
   context = addBuffer(`<!-- STYLES -->\n\n`, context);
-  context = translateStyles(file.document, context);
+  context = translateStyles(entry.document, context);
 
   context = addBuffer(`<!-- ALL LAYERS & COMPONENTS -->\n\n`, context);
   context = translateComponents(context);
 
   if (compilerOptions.includePreviews !== false) {
     context = addBuffer(`<!-- PREVIEWS -->\n\n`, context);
-    context = translatePreviews(file.document, context);
+    context = translatePreviews(entry.document, context);
   }
   return context.buffer;
 };
@@ -96,7 +86,10 @@ const translateImports = (context: TranslateContext) => {
   const importFilePaths = getImportFilePaths(context);
   for (let i = 0, { length } = importFilePaths; i < length; i++) {
     const filePath = importFilePaths[i];
-    let relativePath = path.relative(path.dirname(context.filePath), filePath);
+    let relativePath = path.relative(
+      path.dirname(context.entryFilePath),
+      filePath
+    );
 
     if (relativePath.charAt(0) !== ".") {
       relativePath = "./" + relativePath;
@@ -113,137 +106,85 @@ const translateImports = (context: TranslateContext) => {
 };
 
 const getImportFilePaths = (context: TranslateContext) => {
-  return Object.keys(context.importedDependencyMap);
+  const entry = context.graph[context.entryFilePath];
+  return uniq(
+    Object.keys(entry.imports).map((refId) => {
+      return entry.imports[refId].filePath;
+    })
+  );
 };
 
-const getNodeDocument = (
-  id: string,
-  document: Document,
-  importedDependencyMap: DependencyMap
-): Document => {
-  const dep =
-    importedDependencyMap[getNodeDocumentFilePath(id, importedDependencyMap)];
-  return dep ? dep.document : document;
+const getNodeDocument = (node: Node, graph: DependencyGraph) => {
+  return getNodeDependency(node, graph).document;
 };
 
-const getNode = (
-  id: string,
-  document: Document,
-  importedDependencyMap: DependencyMap
-): Component => {
-  return getNodeById(
-    // TODO - will need to replace component alias
-    id,
-    getNodeDocument(id, document, importedDependencyMap)
-  ) as Component;
+const getNodeDependency = (node: Node, graph: DependencyGraph) => {
+  return graph[getNodeSourceFilePath(node, graph)];
 };
 
-// const getInstanceSourceNode = (
-//   node: Node,
-//   instanceId: string,
-//   document: Document,
-//   importedDependencyMap: DependencyMap
-// ): Node => {
-//   const instance = getNodeById(instanceId, document) as Instance;
-//   const nodePath = getNodePath(node, instance);
-//   const component = getComponentById(instance.componentId, document, importedDependencyMap);
-//   return getNodeByPath(nodePath, component);
+// const getNode = (
+//   id: string,
+//   entryFilePath: string,
+//   graph: DependencyGraph
+// ): Component => {
+//   return getNodeById(
+//     // TODO - will need to replace component alias
+//     id,
+//     getNodeDocument(id, graph)
+//   ) as Component;
 // };
 
 const getComponentById = (
   componentId: string,
-  document: Document,
-  importedDependencyMap: DependencyMap
+  dependency: Dependency2,
+  graph: DependencyGraph
 ): Component => {
-  const documentFilePath = getNodeDocumentFilePath(
-    componentId,
-    importedDependencyMap
-  );
-  return getNodeById(
-    documentFilePath
-      ? importedDependencyMap[documentFilePath].idAliases[componentId] ||
-          componentId
-      : componentId,
-    getNodeDocument(componentId, document, importedDependencyMap)
-  ) as Component;
+  const entry = graph[dependency.filePath];
+  const imp = entry.imports[componentId];
+
+  if (imp) {
+    return getNodeById(imp.nodeId, graph[imp.filePath].document) as Component;
+  }
+
+  return getNodeById(componentId, dependency.document) as Component;
 };
 
 const extractParentComponentId = (id: string) =>
   id.charAt(0) === "I" ? id.substr(1, id.indexOf(";")) : id;
 
-const getSourceNodeId = (
-  id: string,
-  document: Document,
-  importedDependencyMap: DependencyMap
-) => {
-  // const sourceId = id.split(";").map(part => {
-
-  //   const partId = part.replace("I", "");
-
-  //   console.log("PT", partId);
-
-  //   for (const path in importedDependencyMap) {
-  //     const dep = importedDependencyMap[path];
-  //     console.log(dep.idAliases);
-  //     const aliasId = dep.idAliases[partId];
-  //     if (aliasId) {
-  //       console.log("AL", aliasId);
-  //       return part.replace(partId, aliasId);
-  //     }
-  //   }
-
-  //   return part;
-  // });
-
-  // console.log(id, sourceId);
-  return id;
-  // const parentComponentAliasId = extractParentComponentId(id);
-  // const dep = getImportedDependency(parentComponentAliasId, importedDependencyMap);
-  // const componentId = dep ? dep.idAliases[parentComponentAliasId] : id;
-  // return
-};
-
 const isImportedComponent = (
   id: string,
-  document: Document,
-  importedDependencyMap: DependencyMap
+  entryFilePath: string,
+  graph: DependencyGraph
 ) => {
-  return getNodeDocument(id, document, importedDependencyMap) !== document;
+  return graph[entryFilePath].imports[id] != null;
 };
 
-const getImportedDependency = (
-  id: string,
-  importedDependencyMap: DependencyMap
-) => {
-  return importedDependencyMap[
-    getNodeDocumentFilePath(id, importedDependencyMap)
-  ];
-};
-
-const getNodeDocumentFilePath = memoize(
-  (id: string, importedDependencyMap: DependencyMap): string => {
-    const componentId = extractParentComponentId(id);
-    for (const filePath in importedDependencyMap) {
-      const dep = importedDependencyMap[filePath];
-      const idAlias = dep.idAliases[componentId];
-      if (getNodeById(idAlias, dep.document) || getNodeById(id, dep.document))
+const getNodeSourceFilePath = memoize(
+  (node: Node, graph: DependencyGraph): string => {
+    for (const filePath in graph) {
+      const dep = graph[filePath];
+      if (containsNode(node, dep.document)) {
         return filePath;
+      }
     }
     return null;
   }
 );
 
 const getImportedComponentModuleName = (
-  id: string,
+  component: Component,
   context: TranslateContext
 ) => {
   return `module${getImportFilePaths(context).indexOf(
-    getNodeDocumentFilePath(id, context.importedDependencyMap)
+    getNodeSourceFilePath(component, context.graph)
   )}`;
 };
 
 const translateComponents = (context: TranslateContext) => {
-  const allComponents = getAllComponents(context.document);
+  const allComponents = getAllComponents(
+    context.graph[context.entryFilePath].document
+  );
   for (const component of allComponents) {
     context = translateComponent(component, context);
   }
@@ -259,7 +200,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
     return context;
   }
 
-  const document = context.document;
+  const document = context.graph[context.entryFilePath].document;
 
   const componentName = getNodeComponentName(node, document);
   const withAbsoluteLayoutAttr =
@@ -274,7 +215,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
         document,
         node.exportSettings[0]
       )}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
-        node.id,
+        node,
         context
       )} {className?}">\n\n`,
       context
@@ -286,7 +227,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
   if (isVectorLike(node)) {
     context = addBuffer(
       `<div export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
-        node.id,
+        node,
         context
       )} {className?}" width="${node.size.x}" height="${node.size.y}">\n`,
       context
@@ -299,7 +240,7 @@ const translateComponent = (node: Node, context: TranslateContext) => {
 
     context = addBuffer(
       `<${tagName} export component as="${componentName}" ${withAbsoluteLayoutAttr} className="${getNodeClassName(
-        node.id,
+        node,
         context
       )} {className?}">\n`,
       context
@@ -329,37 +270,25 @@ const translatePreviews = (document: Document, context: TranslateContext) => {
 
   for (const component of allComponents) {
     context = translateComponentPreview(component, document, context);
-    context = translatePreview(component, document, context);
+    context = translatePreview(component, context);
     context = addBuffer(`\n`, context);
   }
-
-  // Don't want to translate canvas children because of the explosion
-  // of nodes.
-  // for (const child of canvas.children) {
-  //   context = translatePreview(child, document, context);
-
-  //   // some space between previews
-  //   context = addBuffer(`\n`, context);
-  // }
 
   return context;
 };
 
-const getPreviewComponentName = (nodeId: string, context: TranslateContext) => {
-  // note we fetch component since nodeId & id might not match up (nodeId may be imported)
-  const component = getComponentById(
-    nodeId,
-    context.document,
-    context.importedDependencyMap
-  );
+const getPreviewComponentName = (
+  component: Component,
+  context: TranslateContext
+) => {
+  const entry = context.graph[context.entryFilePath];
+
   let name =
     "_Preview_" +
     pascalCase(component.name + "_" + cleanupNodeId(component.id));
 
-  if (
-    isImportedComponent(nodeId, context.document, context.importedDependencyMap)
-  ) {
-    name = getImportedComponentModuleName(nodeId, context) + ":" + name;
+  if (!containsNode(component, entry.document)) {
+    name = getImportedComponentModuleName(component, context) + ":" + name;
   }
 
   return name;
@@ -375,7 +304,7 @@ const translateComponentPreview = (
     `<${getNodeComponentName(
       node,
       document
-    )} export component as="${getPreviewComponentName(node.id, context)}"${
+    )} export component as="${getPreviewComponentName(node, context)}"${
       context.compilerOptions.includeAbsoluteLayout !== false
         ? " {withAbsoluteLayout}"
         : ""
@@ -384,7 +313,7 @@ const translateComponentPreview = (
   );
 
   context = addBuffer(`>\n`, context);
-  context = translatePreviewChildren(node, document, context, true);
+  context = translatePreviewChildren(node, context, true);
   context = addBuffer(
     `</${getNodeComponentName(node, document)}>\n\n`,
     context
@@ -395,21 +324,22 @@ const translateComponentPreview = (
 
 const translatePreview = (
   node: Node,
-  document: Document,
   context: TranslateContext,
   inComponent?: boolean
 ) => {
+  const dependency = getNodeDependency(node, context.graph);
   if (node.type === NodeType.Instance || node.type === NodeType.Component) {
     context = translateInstancePreview(
       node,
-      document,
-      node.type === NodeType.Instance ? node.componentId : node.id,
+      node.type === NodeType.Instance
+        ? getComponentById(node.componentId, dependency, context.graph)
+        : node,
       context,
       inComponent
     );
   } else {
     context = addBuffer(
-      `<${getNodeComponentName(node, document)}${
+      `<${getNodeComponentName(node, dependency.document)}${
         context.compilerOptions.includeAbsoluteLayout !== false
           ? inComponent
             ? " {withAbsoluteLayout}"
@@ -420,9 +350,9 @@ const translatePreview = (
     );
 
     context = addBuffer(`>\n`, context);
-    context = translatePreviewChildren(node, document, context, inComponent);
+    context = translatePreviewChildren(node, context, inComponent);
     context = addBuffer(
-      `</${getNodeComponentName(node, document)}>\n`,
+      `</${getNodeComponentName(node, dependency.document)}>\n`,
       context
     );
   }
@@ -431,10 +361,10 @@ const translatePreview = (
 
 const translatePreviewChildren = (
   node: Node,
-  document: Document,
   context: TranslateContext,
   inComponent?: boolean
 ) => {
+  const document = getNodeDocument(node, context.graph);
   context = startBlock(context);
   if (node.type === NodeType.Text) {
     if (inComponent) {
@@ -450,7 +380,7 @@ const translatePreviewChildren = (
     }
   } else if (hasChildren(node)) {
     for (const child of node.children) {
-      context = translatePreview(child, document, context, inComponent);
+      context = translatePreview(child, context, inComponent);
     }
   }
   context = endBlock(context);
@@ -464,99 +394,62 @@ const translateTextCharacters = (characters: string) => {
 const getInstanceSourceNode = (
   descendent: Node,
   instance: Node,
-  componentId: string,
+  component: Component,
   context: TranslateContext
 ) => {
-  const component = getComponentById(
-    componentId,
-    context.document,
-    context.importedDependencyMap
-  );
-  // console.log(nestedInstanceNode, instance);
-  // const pcmap = getChildParentMap(instance);
-  // console.log(pcmap[nestedInstanceNode.id], nestedInstanceNode.id, instance.id);
-
-  // if (!pcmap[nestedInstanceNode.id]) {
-  //   console.log(JSON.stringify(instance, null, 2));
-  // }
   const nodePath = getNodePath(descendent, instance);
-  if (!component) {
-    throw new Error(`Cannot find component: ${componentId}`);
-  }
   return getNodeByPath(nodePath, component);
 };
 
-const getPrevNode = memoize(
-  (
-    nodeId: string,
-    document: Document,
-    importedDependencyMap: DependencyMap
-  ) => {
-    if (nodeId.charAt(0) !== "I") {
-      return null;
-    }
-    const nodeDocument = getNodeDocument(
-      nodeId,
-      document,
-      importedDependencyMap
-    );
-    const node = getNodeById(nodeId, nodeDocument);
-    const instance = getNodeInstance(nodeId, document, importedDependencyMap);
-    const nodePath = getNodePath(node, instance);
-
-    const component = getComponentById(
-      instance.componentId,
-      document,
-      importedDependencyMap
-    );
-
-    return getNodeByPath(nodePath, component);
+const getPrevNode = memoize((nextNode: Node, graph: DependencyGraph) => {
+  if (nextNode.id.charAt(0) !== "I") {
+    return null;
   }
-);
+  const nodeDependency = getNodeDependency(nextNode, graph);
 
-const getPrevNodes = memoize(
-  (
-    nodeId: string,
-    document: Document,
-    importedDependencyMap: DependencyMap
-  ) => {
-    const prevNodeInstances = [];
-    const nodeDocument = getNodeDocument(
-      nodeId,
-      document,
-      importedDependencyMap
-    );
-    let currNode = getNodeById(nodeId, nodeDocument);
-    while (1) {
-      currNode = getPrevNode(currNode.id, document, importedDependencyMap);
-      if (!currNode) {
-        break;
-      }
-      prevNodeInstances.push(currNode);
+  const instance = getNodeInstance(nextNode, graph);
+  const instanceDependency = getNodeDependency(instance, graph);
+
+  const nodePath = getNodePath(nextNode, instance);
+
+  const component = getComponentById(
+    instance.componentId,
+    instanceDependency,
+    graph
+  );
+
+  return getNodeByPath(nodePath, component);
+});
+
+const getPrevNodes = memoize((nextNode: Node, graph: DependencyGraph) => {
+  const prevNodeInstances = [];
+  let currNode = nextNode;
+  while (1) {
+    currNode = getPrevNode(currNode, graph);
+    if (!currNode) {
+      break;
     }
-    return prevNodeInstances;
+    prevNodeInstances.push(currNode);
   }
-);
+  return prevNodeInstances;
+});
 
-const getNodeInstance = (
-  nodeId: string,
-  document: Document,
-  importedDependencyMap: DependencyMap
-) => {
-  const nodeDocument = getNodeDocument(nodeId, document, importedDependencyMap);
-  const instanceId = nodeId.substr(1, nodeId.indexOf(";") - 1);
+const getNodeInstance = (node: Node, graph: DependencyGraph) => {
+  const nodeDocument = getNodeDocument(node, graph);
+  const instanceId = node.id.substr(1, node.id.indexOf(";") - 1);
   return getNodeById(instanceId, nodeDocument) as Instance;
 };
 
 const translateInstancePreview = (
   instance: Node,
-  document: Document,
-  componentId: string,
+  component: Component,
   context: TranslateContext,
   inComponent: boolean
 ) => {
+  const instanceDependency = getNodeDependency(instance, context.graph);
+
   context = addBuffer(
-    `<${getPreviewComponentName(componentId, context)}${
+    `<${getPreviewComponentName(component, context)}${
       context.compilerOptions.includeAbsoluteLayout !== false
         ? inComponent
           ? " {withAbsoluteLayout}"
@@ -569,12 +462,15 @@ const translateInstancePreview = (
   // class already exists on class, so skip className
   if (instance.type === NodeType.Component) {
     context = addBuffer(
-      ` className="_Preview_${getUniqueNodeName(instance, context.document)}"`,
+      ` className="_Preview_${getUniqueNodeName(
+        instance,
+        context.graph[context.entryFilePath].document
+      )}"`,
       context
     );
   } else {
     context = addBuffer(
-      ` className="${getNodeClassName(instance.id, context)}"`,
+      ` className="${getNodeClassName(instance, context)}"`,
       context
     );
   }
@@ -582,17 +478,13 @@ const translateInstancePreview = (
     const componentTextNode = getInstanceSourceNode(
       textNode,
       instance,
-      componentId,
+      component,
       context
     );
 
     const componentTextNodeName = getUniqueNodeName(
       componentTextNode,
-      getNodeDocument(
-        componentTextNode.id,
-        context.document,
-        context.importedDependencyMap
-      )
+      getNodeDocument(componentTextNode, context.graph)
     );
 
     if (inComponent) {
@@ -601,7 +493,7 @@ const translateInstancePreview = (
       context = addBuffer(
         ` ${componentTextNodeName}_text={${getUniqueNodeName(
           textNode,
-          document
+          instanceDependency.document
         )}_text}`,
         context
       );
@@ -618,7 +510,7 @@ const translateInstancePreview = (
   return context;
 };
 
-const LAYOUT_STYLE_PROP_NAMES = ["left", "top", "width", "height"];
+const LAYOUT_STYLE_PROP_NAMES = ["left", "top", "width", "height", "position"];
 
 const splitLayoutStyle = (style: any) => [
   pick(style, LAYOUT_STYLE_PROP_NAMES),
@@ -630,8 +522,7 @@ const translateStyles = (document: Document, context: TranslateContext) => {
   context = startBlock(context);
   const computedStyles = computeComponentStyles(context);
 
-  for (const nodeId in computedStyles) {
-    const style = computedStyles[nodeId];
+  for (const { node, style } of computedStyles) {
     const [layoutStyle, appearanceStyle] = splitLayoutStyle(style);
 
     const hasLayoutStyle = Object.keys(layoutStyle).length > 0;
@@ -643,33 +534,18 @@ const translateStyles = (document: Document, context: TranslateContext) => {
       continue;
     }
 
-    const node = getNodeById(
-      nodeId,
-      getNodeDocument(nodeId, context.document, context.importedDependencyMap)
-    );
-
-    const nodes = [
-      node,
-      ...getPrevNodes(nodeId, context.document, context.importedDependencyMap),
-    ];
+    const nodes = [node, ...getPrevNodes(node, context.graph)];
 
     const classNamePath = nodes.map((node) => {
       const component = getOwnerComponent(
         node,
-        getNodeDocument(
-          node.id,
-          context.document,
-          context.importedDependencyMap
-        )
+        getNodeDocument(node, context.graph)
       );
-      // const instance = getNodeInstance(node.id, context.document, context.importedDependencyMap);
-      // const
-      // const component = instance
-      return "." + getNodeClassName(component.id, context);
+      return "." + getNodeClassName(component, context);
     });
 
     const nodeClasName =
-      "." + getNodeClassName(nodes[nodes.length - 1].id, context);
+      "." + getNodeClassName(nodes[nodes.length - 1], context);
 
     const selector = `${classNamePath.join(
       ""
@@ -709,12 +585,14 @@ const translateStyles = (document: Document, context: TranslateContext) => {
 };
 
 const computeComponentStyles = (context: TranslateContext) => {
-  const computed = {};
+  const computed = [];
 
-  const components = getAllComponents(context.document);
+  const components = getAllComponents(
+    context.graph[context.entryFilePath].document
+  );
 
   for (const component of components) {
-    Object.assign(computed, computeNodeStyles(component, context));
+    computed.push(...computeNodeStyles(component, context));
   }
   return computed;
 };
@@ -725,11 +603,7 @@ const computeNodeStyles = (node: Node, context: TranslateContext) => {
 
   // instance present?
   if (node.id.charAt(0) === "I") {
-    const prevNodes = getPrevNodes(
-      node.id,
-      context.document,
-      context.importedDependencyMap
-    );
+    const prevNodes = getPrevNodes(node, context.graph);
 
     for (const currNode of prevNodes) {
       const currNodeStyle = getCSSStyle(currNode, context);
@@ -760,13 +634,16 @@ const computeNodeStyles = (node: Node, context: TranslateContext) => {
     }
   }
 
-  const styles = {
-    [node.id]: style,
-  };
+  const styles = [
+    {
+      node,
+      style,
+    },
+  ];
 
   if (hasChildren(node)) {
     for (const child of node.children) {
-      Object.assign(styles, computeNodeStyles(child, context));
+      styles.push(...computeNodeStyles(child, context));
     }
   }
 
@@ -789,7 +666,7 @@ const translatePreviewClassNames = (
     context = addBuffer(
       `:global(._Preview_${getUniqueNodeName(
         component,
-        context.document
+        context.graph[context.entryFilePath].document
       )}) {\n`,
       context
     );
@@ -806,39 +683,14 @@ const translatePreviewClassNames = (
   return context;
 };
 
-const isLayoutDeclaration = (key: string) =>
-  /position|left|top|width|height/.test(key);
-
 // TODO - need to use compoennt name
-const getNodeClassName = (nodeId: string, context: TranslateContext) => {
-  const node = getNode(nodeId, context.document, context.importedDependencyMap);
-
-  // return "_" + nodeId.split(";").pop().replace("I", "").replace(":", "_");
-
-  // const node = getSourceNode(
-  //   nodeId,
-  //   context.document,
-  //   context.importedDependencyMap
-  // );
-
-  // const nodeName = getUniqueNodeName(
-  //   node,
-  //   getNodeDocument(
-  //     nodeId,
-  //     context.document,
-  //     context.importedDependencyMap
-  //   )
-  // );
-
+const getNodeClassName = (node: Node, context: TranslateContext) => {
   // We need to maintain node ID in class name since we're using the :global selector (which ensures that style overrides work properly).
   // ID here ensures that we're not accidentially overriding styles in other components or files.
   // ID is also prefixed here since that's the pattern used _internally_ for hash IDs.
   return (
-    `_${camelCase(nodeId)}_` +
-    getUniqueNodeName(
-      node,
-      getNodeDocument(nodeId, context.document, context.importedDependencyMap)
-    )
+    `_${camelCase(node.id)}_` +
+    getUniqueNodeName(node, getNodeDocument(node, context.graph))
   );
 };
 
@@ -883,22 +735,6 @@ const getNestedCSSStyles = (
   };
 };
 
-const getStyleOverrides = (style: any, overrides: any): any => {
-  const newStyle = {};
-  for (const key in style) {
-    if (!overrides[key]) {
-      newStyle[key] = "unset";
-    }
-  }
-
-  for (const key in overrides) {
-    if (overrides[key] !== style[key]) {
-      newStyle[key] = overrides[key];
-    }
-  }
-  return newStyle;
-};
-
 const containsStyle = (
   info: ComputedNestedStyleInfo,
   document: Document,
@@ -925,7 +761,7 @@ const getCSSStyle = (
   if (isVectorLike(node)) {
     style.background = `url(./${getNodeExportFileName(
       node,
-      context.document,
+      context.graph[context.entryFilePath].document,
       DEFAULT_EXPORT_SETTINGS
     )})`;
     Object.assign(style, getPositionStyle(node, context));
@@ -969,57 +805,8 @@ const getCSSStyle = (
     // logNodeWarning(node, `Can't generate styles for ${node.type}`);
   }
 
-  // if (instance && node.type !== NodeType.Instance) {
-  //   const targetNode = getInstanceSourceNode(
-  //     node,
-  //     instance,
-  //     instance.componentId,
-  //     context
-  //   );
-  //   // const nodeInstances = [node, ...getPrevSourceNodeInstances(node, context)];
-
-  //   // const sstyle = nodeInstances.reduce((style, instance) => {
-
-  //   // });
-
-  //   const targetNodeStyle = getCSSStyle(targetNode, context);
-  //   style = getStyleOverrides(targetNodeStyle, style);
-  // }
-
   return style;
 };
-
-/**
- *
- */
-
-// const getPrevSourceNodeInstance = (node: Node, context: TranslateContext) => {
-
-//   const ancestors = getNodeAncestors(node, context.document);
-
-//   const nodePath = [(ancestors[0] as Parent).children.indexOf(node)];
-//   for (let i = 0, {length} = ancestors; i < length; i++) {
-
-//     const ancestor = ancestors[i];
-//     if (ancestor.type === NodeType.Instance) {
-//       const ancestorComponent = getSourceNode(ancestor.componentId, context);
-
-//       // In Figma you can delete components & maintain instances. If we find that
-//       // case, the short circuit -- we don't want to deal with that situation.
-//       if (!ancestorComponent) {
-//         logNodeWarning(ancestor, "Found instance that doesn't belong to component");
-//         break;
-//       }
-
-//       return getNodeByPath(nodePath, ancestorComponent);
-//     } else if (ancestor.type === NodeType.Component) {
-//       break;
-//     }
-//     nodePath.unshift(i);
-//   }
-
-//   return null;
-// };
 
 const getVectorStyle = (
   node: VectorNodeProps & BaseNode<any>,
@@ -1254,13 +1041,6 @@ const TEXT_TRANSFORM_MAP = {
   TITLE: "capitalize",
 };
 
-const LETTER_CASE_LABEL_MAP = {};
-
-const TEXT_ALIGN_VERTICAL_MAP = {
-  BOTTOM: "flex-end",
-  CENTER: "center",
-};
-
 const getTextStyle = (node: Text) => {
   const style = node.style;
   const newStyle: any = {};
@@ -1268,12 +1048,6 @@ const getTextStyle = (node: Text) => {
   if (node.blendMode && BLEND_MODE_MAP[node.blendMode]) {
     newStyle["mix-blend-mode"] = BLEND_MODE_MAP[node.blendMode];
   }
-
-  // want to leave this up to code
-  // if (style.textAlignVertical !== "TOP") {
-  //   newStyle.display = "flex";
-  //   newStyle["align-items"] = TEXT_ALIGN_VERTICAL_MAP[style.textAlignVertical];
-  // }
 
   if (style.fontFamily) {
     newStyle["font-family"] = style.fontFamily;
@@ -1373,10 +1147,6 @@ const calcGradiantHandleRadians = ([first, second]: Vector[]) => {
   const radians = Math.atan2(-xdiff, -ydiff);
   return Number(radians.toFixed(3));
 };
-const calcGradent = (start: Vector, end: Vector) => {
-  return ((end.y - start.y) / (end.x - start.x)) * -1;
-};
-const radToDeg = (radian: number) => radian * (180 / Math.PI);
 
 const rgbToHex = (r: number, g: number, b: number) => {
   return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);

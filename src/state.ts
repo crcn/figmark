@@ -25,6 +25,21 @@ export type Dependency = {
   document: Document;
 };
 
+export type Import = {
+  nodeId: string;
+  filePath: string;
+};
+
+export type Dependency2 = {
+  name: string;
+  filePath: string;
+  fileKey: string;
+  imports: Record<string, Import>;
+  document: Document;
+};
+
+export type DependencyGraph = Record<string, Dependency2>;
+
 export type Config = {
   fileNameFormat?: FileNameFormat;
   teamId?: string;
@@ -305,6 +320,12 @@ export const flattenNodes = memoize((node: Node): Node[] => {
 export const getNodeById = memoize(
   (nodeId: string, document: Document): Node => {
     return getTreeNodeIdMap(document)[nodeId];
+  }
+);
+
+export const containsNode = memoize(
+  (node: Node, document: Document): boolean => {
+    return flattenNodes(document).indexOf(node) !== -1;
   }
 );
 
