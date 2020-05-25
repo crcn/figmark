@@ -55,18 +55,23 @@ import { uniq } from "lodash";
 export const translateFigmaProjectToPaperclip = (
   filePath: string,
   graph: DependencyGraph,
-  compilerOptions: CompilerOptions
+  compilerOptions: CompilerOptions,
+  fontPaths: string[]
 ) => {
   const entry = graph[filePath];
 
-  let context = createTranslateContext(filePath, compilerOptions, graph);
+  let context = createTranslateContext(
+    filePath,
+    compilerOptions,
+    graph,
+    fontPaths
+  );
 
   context = addBuffer(`\n<!--\n`, context);
   context = startBlock(context);
   context = addBuffer(`!! AUTO GENERATED, EDIT WITH CAUTION !!\n`, context);
   context = endBlock(context);
   context = addBuffer(`-->\n\n`, context);
-
   context = translateImports(context);
 
   context = addBuffer(`<!-- STYLES -->\n\n`, context);
@@ -84,6 +89,9 @@ export const translateFigmaProjectToPaperclip = (
 
 const translateImports = (context: TranslateContext) => {
   const importFilePaths = getImportFilePaths(context);
+  for (const fontPath of context.fontPaths) {
+    context = addBuffer(`<import src="./${fontPath}" />\n`, context);
+  }
   for (let i = 0, { length } = importFilePaths; i < length; i++) {
     const filePath = importFilePaths[i];
     let relativePath = path.relative(
@@ -147,17 +155,6 @@ const getComponentById = (
   }
 
   return getNodeById(componentId, dependency.document) as Component;
-};
-
-const extractParentComponentId = (id: string) =>
-  id.charAt(0) === "I" ? id.substr(1, id.indexOf(";")) : id;
-
-const isImportedComponent = (
-  id: string,
-  entryFilePath: string,
-  graph: DependencyGraph
-) => {
-  return graph[entryFilePath].imports[id] != null;
 };
 
 const getNodeSourceFilePath = memoize(
@@ -283,9 +280,13 @@ const getPreviewComponentName = (
 ) => {
   const entry = context.graph[context.entryFilePath];
 
+  const nodeName = getUniqueNodeName(
+    component,
+    getNodeDocument(component, context.graph)
+  );
+
   let name =
-    "_Preview_" +
-    pascalCase(component.name + "_" + cleanupNodeId(component.id));
+    "_Preview_" + pascalCase(nodeName + "_" + cleanupNodeId(component.id));
 
   if (!containsNode(component, entry.document)) {
     name = getImportedComponentModuleName(component, context) + ":" + name;
@@ -402,10 +403,14 @@ const getInstanceSourceNode = (
 };
 
 const getPrevNode = memoize((nextNode: Node, graph: DependencyGraph) => {
+  if (nextNode.type === NodeType.Instance && nextNode.id.indexOf(";") === -1) {
+    const instanceDependency = getNodeDependency(nextNode, graph);
+    return getComponentById(nextNode.componentId, instanceDependency, graph);
+  }
+
   if (nextNode.id.charAt(0) !== "I") {
     return null;
   }
-  const nodeDependency = getNodeDependency(nextNode, graph);
 
   const instance = getNodeInstance(nextNode, graph);
   const instanceDependency = getNodeDependency(instance, graph);
@@ -462,7 +467,7 @@ const translateInstancePreview = (
   // class already exists on class, so skip className
   if (instance.type === NodeType.Component) {
     context = addBuffer(
-      ` className="_Preview_${getUniqueNodeName(
+      ` className="_${camelCase(instance.id)}_Preview_${getUniqueNodeName(
         instance,
         context.graph[context.entryFilePath].document
       )}"`,
@@ -536,13 +541,20 @@ const translateStyles = (document: Document, context: TranslateContext) => {
 
     const nodes = [node, ...getPrevNodes(node, context.graph)];
 
-    const classNamePath = nodes.map((node) => {
-      const component = getOwnerComponent(
-        node,
-        getNodeDocument(node, context.graph)
-      );
-      return "." + getNodeClassName(component, context);
-    });
+    let classNamePath = [];
+
+    if (nodes.length > 1 || nodes[0].type !== NodeType.Component) {
+      // if componenents exist in nodes list, then node is an instance, so skip them.
+      classNamePath = nodes
+        .filter((node) => node.type !== NodeType.Component)
+        .map((node) => {
+          const component = getOwnerComponent(
+            node,
+            getNodeDocument(node, context.graph)
+          );
+          return "." + getNodeClassName(component, context);
+        });
+    }
 
     const nodeClasName =
       "." + getNodeClassName(nodes[nodes.length - 1], context);
@@ -592,17 +604,21 @@ const computeComponentStyles = (context: TranslateContext) => {
   );
 
   for (const component of components) {
-    computed.push(...computeNodeStyles(component, context));
+    computeNodeStyles(component, context, computed);
   }
   return computed;
 };
 
-const computeNodeStyles = (node: Node, context: TranslateContext) => {
+const computeNodeStyles = (
+  node: Node,
+  context: TranslateContext,
+  styles: any[] = []
+) => {
   const computedStyle = getCSSStyle(node, context);
   let style = computedStyle;
 
   // instance present?
-  if (node.id.charAt(0) === "I") {
+  if (node.id.charAt(0) === "I" || node.type === NodeType.Instance) {
     const prevNodes = getPrevNodes(node, context.graph);
 
     for (const currNode of prevNodes) {
@@ -634,16 +650,11 @@ const computeNodeStyles = (node: Node, context: TranslateContext) => {
     }
   }
 
-  const styles = [
-    {
-      node,
-      style,
-    },
-  ];
+  styles.push({ node, style });
 
   if (hasChildren(node)) {
     for (const child of node.children) {
-      styles.push(...computeNodeStyles(child, context));
+      computeNodeStyles(child, context, styles);
     }
   }
 
@@ -664,7 +675,7 @@ const translatePreviewClassNames = (
   for (const component of allComponents) {
     const { x, y, width, height } = component.absoluteBoundingBox;
     context = addBuffer(
-      `:global(._Preview_${getUniqueNodeName(
+      `:global(._${camelCase(component.id)}_Preview_${getUniqueNodeName(
         component,
         context.graph[context.entryFilePath].document
       )}) {\n`,
@@ -701,8 +712,8 @@ const getNodeComponentName = (node: Node, document: Document) => {
 
   // dirty check for class prefix
   if (nodeName.indexOf("_") !== -1) {
-    const [parentName, compName] = nodeName.split("_");
-    nodeName = parentName + "_" + pascalCase(compName);
+    const [parentName, ...rest] = nodeName.split("_");
+    nodeName = parentName + "_" + pascalCase(rest.join("_"));
   }
 
   return nodeName;
@@ -719,7 +730,7 @@ const getNestedCSSStyles = (
   context: TranslateContext,
   instance?: Instance
 ): ComputedNestedStyleInfo => {
-  const nodeStyle = getCSSStyle(node, context, instance);
+  const nodeStyle = getCSSStyle(node, context);
   return {
     node,
     style: nodeStyle,
@@ -751,11 +762,7 @@ const containsStyle = (
   return false;
 };
 
-const getCSSStyle = (
-  node: Node,
-  context: TranslateContext,
-  instance?: Instance
-) => {
+const getCSSStyle = (node, context: TranslateContext) => {
   let style: Record<string, string | number> = {};
 
   if (isVectorLike(node)) {
@@ -764,6 +771,7 @@ const getCSSStyle = (
       context.graph[context.entryFilePath].document,
       DEFAULT_EXPORT_SETTINGS
     )})`;
+
     Object.assign(style, getPositionStyle(node, context));
     return style;
   }
@@ -772,10 +780,8 @@ const getCSSStyle = (
     Object.assign(style, getVectorStyle(node, context));
   }
 
-  if (node.type === NodeType.Rectangle) {
-    if (node.cornerRadius) {
-      style["border-radius"] = node.cornerRadius + "px";
-    }
+  if (node.cornerRadius) {
+    style["border-radius"] = node.cornerRadius + "px";
   }
 
   if (node.type === NodeType.Text) {
@@ -799,8 +805,8 @@ const getCSSStyle = (
       style.color = getCSSRGBAColor(solidFill.color);
     }
   } else if (node.type === NodeType.Frame) {
-    Object.assign(style, getPositionStyle(node, context));
-    Object.assign(style, getFrameStyle(node, context));
+    // Object.assign(style, getPositionStyle(node, context));
+    // Object.assign(style, getFrameStyle(node, context));
   } else {
     // logNodeWarning(node, `Can't generate styles for ${node.type}`);
   }
@@ -813,7 +819,7 @@ const getVectorStyle = (
   context: TranslateContext
 ) => {
   const style: any = {};
-  if (node.absoluteBoundingBox) {
+  if (node.absoluteBoundingBox && node.type !== NodeType.Component) {
     Object.assign(style, getPositionStyle(node, context));
   }
   if (node.fills.length) {

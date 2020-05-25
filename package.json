@@ -20,6 +20,7 @@
   "license": "ISC",
   "devDependencies": {
     "husky": "^4.2.5",
+    "p-limit": "^2.3.0",
     "pretty-quick": "^2.0.1",
     "typescript": "^3.9.2"
   },
@@ -31,6 +32,7 @@
     "inquirer": "^7.1.0",
     "lodash": "^4.17.15",
     "lru-cache": "^5.1.1",
+    "mime": "^2.4.5",
     "ora": "^4.0.4",
     "paperclip": "^11.0.68",
     "paperclip-cli": "^11.0.68",

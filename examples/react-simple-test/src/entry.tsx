@@ -2,23 +2,16 @@ import * as React from "react";
 import * as ReactDOM from "react-dom";
 import * as cx from "classnames";
 import {
-  ButtonPrimary,
-  ButtonPrimary_Label3,
-  ButtonPrimary_Background3,
+  ButtonTextIdle_Button,
   classNames,
-} from "./design-generated/test/figmark-2.pc";
+} from "./design-generated/test/interface-public-copy.pc";
 import styled from "styled-components";
 
-const StyledButton = styled(ButtonPrimary)`
+const StyledButton = styled.div`
   cursor: pointer;
-  display: block;
-  display: flex;
-  .${classNames.buttonPrimary_background3} {
-    padding: 8px 10px;
-  }
-  .${classNames.buttonPrimary_label3} {
-    font-family: Helvetica;
-  }
+  display: inline-block;
+  padding: 8px 14px;
+  margin: 10px;
 `;
 
 type EnhancedButtonProps = {
@@ -35,13 +28,19 @@ const EnhancedButton = ({
 }: EnhancedButtonProps) => (
   <StyledButton
     className={cx({
-      [classNames.buttonDisabled]: disabled,
-      [classNames.buttonSecondary]: secondary,
+      [classNames.buttonTextIdle]: !disabled,
+      [classNames.buttonTextDisabled]: disabled,
+      [classNames.buttonTextHover]: false,
     })}
   >
-    <ButtonPrimary_Background3>
-      <ButtonPrimary_Label3>{children}</ButtonPrimary_Label3>
-    </ButtonPrimary_Background3>
+    <span
+      className={cx(
+        classNames.buttonTextIdle_button,
+        classNames.buttonTextDisabled_button
+      )}
+    >
+      {children}
+    </span>
   </StyledButton>
 );
 

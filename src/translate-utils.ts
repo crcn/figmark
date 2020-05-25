@@ -15,12 +15,14 @@ export type TranslateContext = {
   isNewLine: boolean;
   indent: string;
   keyCount: number;
+  fontPaths: string[];
 };
 
 export const createTranslateContext = (
   entryFilePath: string,
   compilerOptions: CompilerOptions,
   graph: DependencyGraph,
+  fontPaths: string[],
   indent: string = "  "
 ): TranslateContext => ({
   entryFilePath,
@@ -31,6 +33,7 @@ export const createTranslateContext = (
   lineNumber: 0,
   indent,
   keyCount: 0,
+  fontPaths,
 });
 
 export const addBuffer = (buffer: string, context: TranslateContext) => ({

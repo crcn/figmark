@@ -5,7 +5,7 @@ import { memoize } from "./memo";
 import { camelCase } from "lodash";
 // _7113_testB3_testA24
 
-const MAX_LABEL_NAME_LENGTH = 20;
+const MAX_LABEL_NAME_LENGTH = 40;
 
 export type FileConfig = {
   key: string;
@@ -293,7 +293,8 @@ export const hasVectorProps = (node: Node): node is VectorLikeNode => {
     node.type === NodeType.Frame ||
     node.type == NodeType.Rectangle ||
     node.type == NodeType.Vector ||
-    node.type == NodeType.Instance
+    node.type == NodeType.Instance ||
+    node.type == NodeType.Component
   );
 };
 
@@ -339,8 +340,17 @@ export const hasChildren = (node: Node): node is Parent => {
   return (node as any).children?.length > 0;
 };
 
-const getClippedName = (name: string) =>
-  exceedsMaxLabelName(name) ? name.substr(0, MAX_LABEL_NAME_LENGTH) : name;
+const getCleanedName = (name: string) => {
+  // remove certain chars
+  let newName = camelCase(
+    name.replace(/[\\/\-\s]/g, "_").replace(/[^_\w\d]/g, "")
+  );
+  newName = exceedsMaxLabelName(newName)
+    ? newName.substr(0, MAX_LABEL_NAME_LENGTH)
+    : newName;
+
+  return camelCase(newName);
+};
 const exceedsMaxLabelName = (name: string) =>
   name.length > MAX_LABEL_NAME_LENGTH;
 export const getNodeExportFileName = (
@@ -356,23 +366,15 @@ export const getOriginalNode = (nodeId: string, document: Document) => {
   return getNodeById(nodeId.split(";").pop().replace("I", ""), document);
 };
 
-export const getUniqueNodeName = (node: Node, document: Document) => {
-  const nodesThatShareName = flattenNodes(document)
-    .filter((child) => {
-      // skip instances -- we want the real node
-      if (child.id.indexOf(";") !== -1) {
-        return false;
-      }
+const flattenComponentNodes = memoize((document: Document) => {
+  const allChildren = [];
+  for (const component of getAllComponents(document)) {
+    allChildren.push(...flattenNodes(component));
+  }
+  return allChildren;
+});
 
-      getClippedName(node.name) === getClippedName(child.name);
-    })
-    .sort((a, b) => {
-      // move components to the
-      if (a.type === NodeType.Component) return -1;
-      if (b.type === NodeType.Component) return 1;
-      return 0;
-    });
-
+const getNodeName = memoize((node: Node, document: Document) => {
   let prefix = "";
   const ownerComponent = getOwnerComponent(node, document);
 
@@ -380,16 +382,58 @@ export const getUniqueNodeName = (node: Node, document: Document) => {
     prefix = getUniqueNodeName(ownerComponent, document) + "_";
   }
 
+  const nodeName = getCleanedName(node.name);
+
   // don't allow numbers in node names
-  prefix += !node.name || isNaN(Number(node.name.charAt(0))) ? "" : "_";
+  prefix += !node.name || isNaN(Number(nodeName.charAt(0))) ? "" : "_";
 
-  const postfix =
-    nodesThatShareName.length > 1 && nodesThatShareName[0] !== node
-      ? nodesThatShareName.indexOf(node) + 1
-      : "";
+  return prefix + nodeName;
+});
 
-  return prefix + camelCase(node.name + postfix);
-};
+//
+export const getUniqueNodeName = memoize((node: Node, document: Document) => {
+  let nodesThatShareName;
+  let nodeName = getNodeName(node, document);
+
+  while (1) {
+    if (node.type === NodeType.Component) {
+      nodesThatShareName = flattenComponentNodes(document)
+        .filter((component) => {
+          return getCleanedName(component.name) === nodeName;
+        })
+        .sort((a, b) => {
+          if (a.type == NodeType.Component) return -1;
+          if (b.type == NodeType.Component) return 1;
+          return 0;
+        });
+    } else {
+      nodesThatShareName = flattenComponentNodes(document)
+        .filter((child) => {
+          return nodeName === getNodeName(child, document);
+        })
+        .sort((a, b) => {
+          if (a.type == NodeType.Component) return -1;
+          if (b.type == NodeType.Component) return 1;
+          return 0;
+        });
+    }
+
+    if (nodesThatShareName.length < 2 || nodesThatShareName[0] == node) {
+      break;
+    }
+
+    nodeName += nodesThatShareName.indexOf(node) + 1;
+  }
+
+  // const postfix =
+  //   nodesThatShareName.length > 1 && nodesThatShareName[0] !== node
+  //     ? "i" + nodesThatShareName.indexOf(node) + 1
+  //     : "";
+
+  // // nodeName += postfix;
+
+  return nodeName;
+});
 
 export const getNodePath = memoize((node: Node, root: Node) => {
   const childParentMap = getChildParentMap(root);

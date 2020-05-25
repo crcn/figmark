@@ -14,7 +14,10 @@ import * as path from "path";
 import * as fsa from "fs-extra";
 import * as https from "https";
 import * as chalk from "chalk";
+import * as mime from "mime";
 import { camelCase, kebabCase, snakeCase } from "lodash";
+import * as crypto from "crypto";
+import plimit from "p-limit";
 import {
   Config,
   readConfigSync,
@@ -33,7 +36,6 @@ import {
   Dependency2,
   Import,
 } from "./state";
-import { spawn } from "child_process";
 import { Document } from "./state";
 import { Version } from "figma-api/lib/api-types";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
@@ -49,6 +51,7 @@ import {
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
 const LATEST_VERSION_NAME = "latest";
+const MAX_CONCURRENT_DOWNLOADS = 10;
 
 const configFilePath = path.join(cwd, CONFIG_FILE_NAME);
 
@@ -208,22 +211,25 @@ export const pull = async ({ watch }: SyncOptions) => {
   const syncDir = path.join(cwd, dest);
 
   const client = new Figma.Api({ personalAccessToken });
-  const projects = await getTeamProjects(client, teamId);
 
   logInfo(`Loading all projects`);
-  const graph = await loadDependencyGraph(
-    client,
-    syncDir,
-    fileNameFormat,
-    teamId
-  );
+  let graph;
+
+  // for testing
+  if (true) {
+    graph = JSON.parse(
+      fs.readFileSync(__dirname + "/../mock/graph-1.json", "utf8")
+    );
+  } else {
+    graph = await loadDependencyGraph(client, syncDir, fileNameFormat, teamId);
+  }
+  // fs.writeFileSync(__dirname + `/../mock/graph-1.json`, JSON.stringify(graph, null, 2));
 
   for (const filePath in graph) {
     await downloadProjectFile(
       client,
       graph[filePath],
       graph,
-      graph[filePath].fileKey,
       compilerOptions,
       config
     );
@@ -356,37 +362,39 @@ const downloadProjectFile = async (
   client: Figma.Api,
   module: Dependency2,
   graph: DependencyGraph,
-  fileKey: string,
   compilerOptions: CompilerOptions,
   config: Config
 ) => {
   const fileDir = path.dirname(module.filePath);
   fsa.mkdirpSync(fileDir);
 
-  logInfo(`Translating ${module.name} to JavaScript`);
+  logInfo(`Translating ${chalk.bold(module.name)} to Paperclip`);
+
+  const fontPaths = await downloadFonts(module, config.fileNameFormat);
 
   const pcContent = translateFigmaProjectToPaperclip(
     module.filePath,
     graph,
-    compilerOptions
+    compilerOptions,
+    fontPaths
   );
 
-  if (fs.existsSync(module.filePath)) {
-    const existingFileContent = fs.readFileSync(module.filePath, "utf8");
+  // if (fs.existsSync(module.filePath)) {
+  //   const existingFileContent = fs.readFileSync(module.filePath, "utf8");
 
-    if (existingFileContent === pcContent) {
-      return;
-    }
-  }
+  //   if (existingFileContent === pcContent) {
+  //     return;
+  //   }
+  // }
 
   fs.writeFileSync(module.filePath, pcContent);
-  await downloadImages(client, fileKey, fileDir);
-  await downloadNodeImages(
-    client,
-    fileKey,
-    module.document as Document,
-    fileDir
-  );
+
+  // await downloadImageRefs(client, module, fileDir);
+  // await downloadNodeImages(
+  //   client,
+  //   module,
+  //   fileDir
+  // );
 
   // Compiling for convenience so that users can start including
   // designs immediately
@@ -414,57 +422,143 @@ const compilePC = async (filePath: string) => {
   );
 };
 
-const downloadImages = async (
-  client: Figma.Api,
-  fileKey: string,
-  destPath: string
-) => {
-  logInfo(`Downloading images`);
-  const result = await client.getImageFills(fileKey);
-
-  for (const refId in result.meta.images) {
-    await downloadImageRef(client, destPath, refId, result.meta.images[refId]);
-  }
-};
-
-const getImportedDocuments = async (
-  client: Figma.Api,
-  file,
-  fileKey: string,
-  syncDir,
-  fileNameFormat: FileNameFormat,
-  projects: Project[]
-) => {
-  const importedDocuments: Record<string, Dependency> = {};
-
-  for (const importId in file.components) {
-    const componentRef = file.components[importId];
-    if (componentRef.key) {
-      const componentInfo = (await client.getComponent(
-        componentRef.key
-      )) as any;
-
-      if (componentInfo.meta.file_key === fileKey) {
-        continue;
+const downloadFonts = async (
+  module: Dependency2,
+  fileNameFormat: FileNameFormat
+): Promise<string[]> => {
+  const fontFamilyMap = {};
+  for (const node of flattenNodes(module.document) as any) {
+    if (node.style && node.style.fontFamily) {
+      if (!fontFamilyMap[node.style.fontFamily]) {
+        fontFamilyMap[node.style.fontFamily] = {};
       }
-      const file = await client.getFile(componentInfo.meta.file_key);
-
-      const sourceFilePath = getFileKeySourcePath(
-        componentInfo.meta.file_key,
-        syncDir,
-        fileNameFormat,
-        projects
-      );
-      const info = importedDocuments[sourceFilePath] || {
-        idAliases: {},
-        document: file.document as any,
-      };
-
-      info.idAliases[importId] = componentInfo.meta.node_id;
-      importedDocuments[sourceFilePath] = info;
+      fontFamilyMap[node.style.fontFamily][node.style.fontWeight || 400] = 1;
     }
   }
-  return importedDocuments;
+  const limit = plimit(5);
+
+  const fontFamilies = Object.keys(fontFamilyMap);
+  return (
+    await Promise.all(
+      fontFamilies.map((family) => {
+        const weights = Object.keys(fontFamilyMap[family]);
+        return limit(() => {
+          return new Promise((resolve) => {
+            https.get(
+              `https://fonts.googleapis.com/css?family=${encodeURIComponent(
+                family
+              )}:${weights.join(",")}`,
+              (response) => {
+                if (response.statusCode !== 200) {
+                  logWarn(
+                    `Cannot download Google font ${chalk.bold(
+                      family
+                    )}. You'll need to include it manually.`
+                  );
+                  return resolve();
+                }
+
+                let buffer = "";
+
+                response.on("data", (chunk) => {
+                  buffer += chunk;
+                });
+
+                response.on("end", async (chunk) => {
+                  const fontUrls = buffer
+                    .match(/url\((.*?)\)/g)
+                    .map((url) => url.replace(/url\((.*?)\)/, "$1"));
+
+                  for (const url of fontUrls) {
+                    const fileName = await downloadFont(
+                      url,
+                      path.dirname(module.filePath)
+                    );
+                    buffer = buffer.replace(url, `./${fileName}`);
+                  }
+                  const basename =
+                    formatFileName(family, fileNameFormat) + ".css";
+
+                  fs.writeFileSync(
+                    path.join(path.dirname(module.filePath), basename),
+                    buffer
+                  );
+                  resolve(basename);
+                });
+              }
+            );
+          });
+        });
+      })
+    )
+  ).filter(Boolean) as string[];
+};
+
+const downloadFont = (url: string, dir: string) =>
+  new Promise((resolve, reject) => {
+    https.get(url, (response) => {
+      const contentType = response.headers["content-type"];
+      const ext = mime.getExtension(contentType);
+      const hash =
+        crypto.createHash("md5").update(url).digest("hex") +
+        url.match(/\.\w+/).pop();
+      const fileName = `${hash}.${ext}`;
+
+      const stream = fs.createWriteStream(path.join(dir, fileName));
+      response.pipe(stream);
+
+      response.on("close", () => {
+        resolve(fileName);
+      });
+    });
+  });
+
+const downloadImageRefs = async (
+  client: Figma.Api,
+  module: Dependency2,
+  destPath: string
+) => {
+  const result = await client.getImageFills(module.fileKey);
+  const allComponentNodes = getAllComponents(module.document).reduce(
+    (allComponents, component) => {
+      allComponents.push(...flattenNodes(component));
+      return allComponents;
+    },
+    []
+  );
+
+  let refIdsToInclude = {};
+
+  for (const node of allComponentNodes) {
+    if (node.fills) {
+      for (const fill of node.fills) {
+        if (fill.type === "IMAGE") {
+          refIdsToInclude[fill.imageRef] = 1;
+        }
+      }
+    }
+  }
+
+  const limit = plimit(MAX_CONCURRENT_DOWNLOADS);
+
+  const promises = [];
+
+  for (const refId in result.meta.images) {
+    if (!refIdsToInclude[refId]) {
+      continue;
+    }
+    promises.push(
+      limit(() => {
+        return downloadImageRef(
+          client,
+          destPath,
+          refId,
+          result.meta.images[refId]
+        );
+      })
+    );
+  }
+  await Promise.all(promises);
 };
 
 const getFileKeySourcePath = (
@@ -494,15 +588,18 @@ const getFileKeySourcePath = (
 
 const downloadNodeImages = async (
   client: Figma.Api,
-  fileKey: string,
-  document: Document,
+  module: Dependency2,
   destPath: string
 ) => {
+  logInfo(`Download ${chalk.bold(module.name)} exports`);
   // only want to export components & their children
-  const allNodes = getAllComponents(document).reduce((allNodes, component) => {
-    allNodes.push(...flattenNodes(component));
-    return allNodes;
-  }, []);
+  const allNodes = getAllComponents(module.document).reduce(
+    (allNodes, component) => {
+      allNodes.push(...flattenNodes(component));
+      return allNodes;
+    },
+    []
+  );
 
   let nodeIdsByExport: Record<
     string,
@@ -546,7 +643,7 @@ const downloadNodeImages = async (
 
   for (const key in nodeIdsByExport) {
     const { settings, nodes } = nodeIdsByExport[key];
-    const result = await client.getImage(fileKey, {
+    const result = await client.getImage(module.fileKey, {
       ids: Object.keys(nodes).join(","),
       format: settings.format.toLowerCase() as any,
       scale: settings.constraint.value,
@@ -556,7 +653,7 @@ const downloadNodeImages = async (
       await downloadImageRef(
         client,
         destPath,
-        getNodeExportFileName(nodes[nodeId], document, settings)
+        getNodeExportFileName(nodes[nodeId], module.document, settings)
           .split(".")
           .shift(),
         result.images[nodeId]

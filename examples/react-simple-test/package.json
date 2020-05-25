@@ -5,9 +5,9 @@
   "main": "index.js",
   "scripts": {
     "update:design": "figmark pull",
-    "build": "npm run build:definitions && npm run build:webpack",
-    "build:webpack": "webpack",
-    "build:definitions": "paperclip --definition --write"
+    "build": "npm run build:webpack",
+    "build:watch": "webpack --watch",
+    "build:webpack": "webpack"
   },
   "author": "",
   "license": "ISC",
@@ -19,9 +19,9 @@
     "file-loader": "^6.0.0",
     "html-webpack-plugin": "^4.3.0",
     "husky": "^4.2.5",
-    "paperclip": "^11.0.67",
-    "paperclip-cli": "^11.0.67",
-    "paperclip-compiler-react": "^11.0.71",
+    "paperclip": "^11.0.78",
+    "paperclip-cli": "^11.0.78",
+    "paperclip-compiler-react": "^11.0.78",
     "paperclip-loader": "^11.0.68",
     "prettier": "^2.0.5",
     "style-loader": "^1.2.1",

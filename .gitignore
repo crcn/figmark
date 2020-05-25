@@ -1,4 +1,5 @@
 node_modules
+mock
 lib
 .DS_Store
 design-generated
