@@ -7,7 +7,6 @@ import {
   PC_CONFIG_FILE_NAME,
   DEFAULT_COMPILER_TARGET_NAME,
 } from "./constants";
-import * as Figma from "figma-api";
 import * as inquirer from "inquirer";
 import * as fs from "fs";
 import * as path from "path";
@@ -30,14 +29,11 @@ import {
   CompilerOptions,
   Project,
   ProjectFile,
-  Dependency,
   getAllComponents,
   DependencyGraph,
   Dependency2,
   Import,
 } from "./state";
-import { Document } from "./state";
-import { Version } from "figma-api/lib/api-types";
 import { translateFigmaProjectToPaperclip } from "./translate-pc";
 import {
   logInfo,
@@ -47,6 +43,7 @@ import {
   exec,
   installDependencies,
 } from "./utils";
+import { FigmaApi } from "./api";
 
 const cwd = process.cwd();
 const WATCH_TIMEOUT = 1000 * 5;
@@ -72,7 +69,7 @@ export const init = async () => {
     },
   ]);
 
-  const client = new Figma.Api({ personalAccessToken });
+  const client = new FigmaApi(personalAccessToken);
 
   logInfo("Fetching files versions...");
 
@@ -141,11 +138,11 @@ type SyncOptions = {
   watch?: boolean;
 };
 
-const defaultVersionGetter = (versions: Version[]) =>
+const defaultVersionGetter = (versions: any[]) =>
   versions.length > 0 ? versions[0].id : LATEST_VERSION_NAME;
 
 const getFileVersions = async (
-  client: Figma.Api,
+  client: FigmaApi,
   teamId: string,
   getVersion = defaultVersionGetter
 ) => {
@@ -158,7 +155,7 @@ const getFileVersions = async (
   return map;
 };
 
-const getTeamProjects = async (client: Figma.Api, teamId: string) => {
+const getTeamProjects = async (client: FigmaApi, teamId: string) => {
   const projects: Project[] = [];
   const { projects: remoteProjects } = await client.getTeamProjects(teamId);
   for (const project of remoteProjects) {
@@ -179,7 +176,7 @@ const getTeamProjects = async (client: Figma.Api, teamId: string) => {
   return projects;
 };
 
-const getTeamFiles = async (client: Figma.Api, teamId: string) => {
+const getTeamFiles = async (client: FigmaApi, teamId: string) => {
   const projects = await getTeamProjects(client, teamId);
   const allFiles: ProjectFile[] = [];
   for (const project of projects) {
@@ -210,13 +207,13 @@ export const pull = async ({ watch }: SyncOptions) => {
 
   const syncDir = path.join(cwd, dest);
 
-  const client = new Figma.Api({ personalAccessToken });
+  const client = new FigmaApi(personalAccessToken);
 
   logInfo(`Loading all projects`);
   let graph;
 
   // for testing
-  if (true) {
+  if (false) {
     graph = JSON.parse(
       fs.readFileSync(__dirname + "/../mock/graph-1.json", "utf8")
     );
@@ -269,7 +266,7 @@ const formatFileName = (name: string, fileNameFormat: FileNameFormat) => {
 };
 
 const loadDependencyGraph = async (
-  client: Figma.Api,
+  client: FigmaApi,
   syncDir: string,
   fileNameFormat: FileNameFormat,
   teamId: string
@@ -292,7 +289,7 @@ const loadDependencyGraph = async (
 };
 
 const loadDependency = async (
-  client: Figma.Api,
+  client: FigmaApi,
   syncDir: string,
   fileKey: string,
   fileNameFormat: FileNameFormat,
@@ -359,7 +356,7 @@ const loadDependency = async (
 };
 
 const downloadProjectFile = async (
-  client: Figma.Api,
+  client: FigmaApi,
   module: Dependency2,
   graph: DependencyGraph,
   compilerOptions: CompilerOptions,
@@ -477,11 +474,11 @@ const downloadFonts = async (
                     buffer = buffer.replace(url, `./${fileName}`);
                   }
                   const basename =
-                    formatFileName(family, fileNameFormat) + ".css";
+                    formatFileName(family, fileNameFormat) + ".pc";
 
                   fs.writeFileSync(
                     path.join(path.dirname(module.filePath), basename),
-                    buffer
+                    wrapCSSContentInPC(buffer)
                   );
                   resolve(basename);
                 });
@@ -492,6 +489,10 @@ const downloadFonts = async (
       })
     )
   ).filter(Boolean) as string[];
+};
+
+const wrapCSSContentInPC = (buffer: string) => {
+  return `<style>\n` + buffer + `\n</style>`;
 };
 
 const downloadFont = (url: string, dir: string) =>
@@ -514,7 +515,7 @@ const downloadFont = (url: string, dir: string) =>
   });
 
 const downloadImageRefs = async (
-  client: Figma.Api,
+  client: FigmaApi,
   module: Dependency2,
   destPath: string
 ) => {
@@ -587,7 +588,7 @@ const getFileKeySourcePath = (
 };
 
 const downloadNodeImages = async (
-  client: Figma.Api,
+  client: FigmaApi,
   module: Dependency2,
   destPath: string
 ) => {
@@ -677,7 +678,7 @@ const addNodeToDownload = (child, rec, setting: any): any => {
 };
 
 const downloadImageRef = (
-  client: Figma.Api,
+  client: FigmaApi,
   destPath: string,
   name: string,
   url: string

@@ -1,5 +1,3 @@
-import * as Figma from "figma-api";
-
 export class Client {
   private _api: Figma.Api;
 

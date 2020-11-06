@@ -289,7 +289,8 @@ const getPreviewComponentName = (
     "_Preview_" + pascalCase(nodeName + "_" + cleanupNodeId(component.id));
 
   if (!containsNode(component, entry.document)) {
-    name = getImportedComponentModuleName(component, context) + ":" + name;
+    name = getImportedComponentModuleName(component, context) + "." + name;
+    console.log("NMM");
   }
 
   return name;

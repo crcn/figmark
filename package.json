@@ -27,7 +27,6 @@
   "dependencies": {
     "chalk": "^4.0.0",
     "fast-memoize": "^2.5.2",
-    "figma-api": "^1.5.5",
     "fs-extra": "^9.0.0",
     "inquirer": "^7.1.0",
     "lodash": "^4.17.15",

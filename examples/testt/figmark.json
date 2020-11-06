@@ -5,7 +5,7 @@
   "teamId": "842804427190189344",
   "fileVersions": {},
   "compilerOptions": {
-    "includeAbsoluteLayout": true,
+    "includeAbsoluteLayout": false,
     "includePreviews": true
   },
   "compileOnPull": true
