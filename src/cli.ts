@@ -42,6 +42,7 @@ import {
   logWarn,
   exec,
   installDependencies,
+  logError,
 } from "./utils";
 import { FigmaApi } from "./api";
 
@@ -325,9 +326,16 @@ const loadDependency = async (
   for (const importId in file.components) {
     const componentRef = file.components[importId];
     if (componentRef.key) {
-      const componentInfo = (await client.getComponent(
-        componentRef.key
-      )) as any;
+      let componentInfo;
+
+      try {
+        componentInfo = (await client.getComponent(componentRef.key)) as any;
+      } catch (e) {
+        if (e.status === 404) {
+          logError(`Unable to find component`);
+          throw e;
+        }
+      }
 
       if (componentInfo.meta.file_key === fileKey) {
         continue;

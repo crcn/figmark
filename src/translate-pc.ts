@@ -820,6 +820,7 @@ const getVectorStyle = (
   context: TranslateContext
 ) => {
   const style: any = {};
+  console.log(node);
   if (node.absoluteBoundingBox && node.type !== NodeType.Component) {
     Object.assign(style, getPositionStyle(node, context));
   }

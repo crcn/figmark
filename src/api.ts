@@ -3,8 +3,8 @@ import * as qs from "querystring";
 
 export class FigmaApi {
   constructor(readonly personalAccessToken: string) {}
-  getFile(fileKey: string, options: any) {
-    return this._get(`/v1/files/${fileKey}`, options);
+  getFile(fileKey: string, options: any = {}) {
+    return this._get(`/v1/files/${fileKey}`, { geometry: "paths", ...options });
   }
 
   getVersions(fileKey: string) {
@@ -27,6 +27,7 @@ export class FigmaApi {
   }
 
   private _get(pathname: string, query: Record<string, string> = {}) {
+    const search = Object.keys(query).length ? "?" + qs.stringify(query) : "";
     return new Promise<any>((resolve, reject) => {
       https.get(
         {
@@ -34,10 +35,7 @@ export class FigmaApi {
             "X-FIGMA-TOKEN": this.personalAccessToken,
           },
           hostname: "api.figma.com",
-          path: pathname,
-          search: Object.keys(query).length
-            ? "?" + qs.stringify(query)
-            : undefined,
+          path: pathname + search,
         },
         (res) => {
           let buffer = "";
@@ -48,7 +46,11 @@ export class FigmaApi {
               const result = JSON.parse(buffer);
               resolve(result);
             } else {
-              reject(buffer);
+              try {
+                reject(JSON.parse(buffer));
+              } catch (e) {
+                reject(buffer);
+              }
             }
           });
         }

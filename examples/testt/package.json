@@ -3,12 +3,13 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "dependencies": {},
+  "dependencies": {
+    "paperclip": "^15.1.1",
+    "paperclip-cli": "^15.1.1",
+    "paperclip-compiler-react": "^15.1.1"
+  },
   "devDependencies": {
-    "figmark": "^1.0.2",
-    "paperclip": "^11.0.68",
-    "paperclip-cli": "^11.0.68",
-    "paperclip-compiler-react": "^11.0.71"
+    "figmark": "^1.0.2"
   },
   "scripts": {
     "test": "mocha"
